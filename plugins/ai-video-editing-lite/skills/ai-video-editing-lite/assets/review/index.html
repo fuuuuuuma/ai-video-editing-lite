@@ -673,13 +673,15 @@ function anim(el, frames, opts){ if(RM.matches || !el.animate) return null; retu
 // current timeline is mapped back to the flat video by source time; a clip it does not hold (a restored cut) is
 // drawn live from the proxies as before.
 let flatEl=null, flatOn=false;
-const isLive=L=>L.role==='caption' || /^(qr-q|qrbg-|thumb)/.test(String(L.id||''));
+const isLive=L=>L.role==='caption' || L.role==='header' || L.role==='small_qr' || /^(qr-q|qrbg-|thumb)/.test(String(L.id||''));
 function setupFlat(){
   const segs=(M.flat&&M.flat.segments)||[]; const by=new Map();
   for(const g of segs){ if(!by.has(g.media)) by.set(g.media,[]); by.get(g.media).push(g); }
   // the same source moment can appear twice (the avan, the end card): take the copy nearest on the timeline, and only
   // within 2 minutes of where the clip now sits (a cut changed on the page moves the timeline by its length)
+  const moved=(M.retimed||[]).filter(r=>r.kind==='screen'||r.kind==='emphasis').map(r=>[Math.min(r.from[0],r.to[0]),Math.max(r.from[1],r.to[1])]);
   for(const c of clips){ c.flatT=null; const d=(c.end-c.start)/FPS; let best=1e9;
+    if(moved.some(([x,y])=>c.start<y && x<c.end)) continue;      // drawn live: the flat video holds it where it was
     for(const g of by.get(c.media)||[]){ const gd=(g.end-g.start)/FPS;
       if(c.src>=g.src-0.5/FPS && c.src+d<=g.src+gd+0.5/FPS){ const at=g.start+(c.src-g.src)*FPS, dist=Math.abs(at-c.start);
         if(dist<best && dist<=120*FPS){ best=dist; c.flatT=at/FPS; } } } }
@@ -1032,8 +1034,9 @@ function markTargetOf(m){
   if(m.kind==='emphasis'){ const L=captionLayers.find(L=>L.caption_kind==='emphasis' && L._s===m.start); return L?{kind:'emphasis', id:L.id, label:(L.text||m.label||'').replace(/\n/g,' ')}:null; }
   if(m.kind==='qr'){ const L=olayers.find(L=>/^qr-/.test(L.id||'') && L.start===m.start); return L?{kind:'large_qr', id:L.id, label:'大型QR'}:null; }
   if(m.kind==='thumbnail'){ const L=olayers.find(L=>L.type==='image' && /^thumb-/.test(L.id||'') && L.start===m.start); return L?{kind:'thumbnail', id:L.id, label:'過去動画のサムネイル'}:null; }
+  if(m.kind==='screen'){ const L=olayers.find(L=>L.id==='frame-'+m.label && L.start===m.start); return L?{kind:'screen', id:L.id, label:'画面収録 '+m.label}:null; }
   return null; }
-const SEL_NAME=t=>t.kind==='emphasis'?`強調「${t.label}」`:t.kind==='thumbnail'?'過去動画のサムネイル':'大型QR';
+const SEL_NAME=t=>t.kind==='emphasis'?`強調「${t.label}」`:t.kind==='thumbnail'?'過去動画のサムネイル':t.kind==='screen'?t.label:'大型QR';
 function markIs(m,t){ const x=markTargetOf(m); return !!x && x.id===t.id; }
 function targetLayer(t){ return M.layers.find(L=>L.id===t.id)||null; }
 function targetSpan(t){ const L=targetLayer(t); return L?[L._s??L.start, L._e??L.end]:[0,0]; }
@@ -1827,6 +1830,7 @@ function loadTimeline(){
   clips.length=0; vlayers.length=0; olayers.length=0; captionLayers.length=0; layerByCap.clear(); cutFrames=[];
   M.clips.forEach(c=>clips.push({...c, uid:'c'+c.i+'-'+(M.cut_rev||''), isBase:true}));
   for(const L of M.layers){ L._s=L.start; L._e=L.end;
+    if(L.parked) continue;      // a caption waiting under a screen recording (shown when the screen recording is moved)
     if(L.type==='video') vlayers.push({uid:'l'+L.i+'-'+(M.cut_rev||''), media:L.media, src:L.src, start:L.start, end:L.end, isBase:false, layer:L}); else olayers.push(L);
     if(L.role==='caption'){ captionLayers.push(L); if(!layerByCap.has(L.caption_id||L.id)) layerByCap.set(L.caption_id||L.id,L); } }
   captionLayers.sort((a,b)=>a.start-b.start||a.i-b.i); M.camera.sort((a,b)=>a.start-b.start);

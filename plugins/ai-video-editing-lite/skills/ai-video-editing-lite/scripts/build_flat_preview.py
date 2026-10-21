@@ -30,7 +30,9 @@ LIVE_IDS = ('qr-q', 'qrbg-', 'thumb')       # large QR, its blurred backdrop, a 
 
 
 def live(layer):
-    return layer.get('role') == 'caption' or str(layer.get('id', '')).startswith(LIVE_IDS)
+    # headers and the small QR stay live too: they step aside while a large QR shows, and the large QR can be moved
+    # on the page (2026-10-21)
+    return layer.get('role') in ('caption', 'header', 'small_qr') or str(layer.get('id', '')).startswith(LIVE_IDS)
 
 
 def flat_plan(plan, scale):
@@ -95,7 +97,7 @@ def main():
         'media': key, 'width': fp['width'], 'height': fp['height'],
         # the clips of the timeline the flat video was made from: the page maps any later timeline back by source time
         'segments': [{'start': c['start'], 'end': c['end'], 'media': c['media'], 'src': c['src']} for c in manifest['clips']],
-        'live': 'captions, large QR (+ backdrop), past-video thumbnail (+ backdrop)',
+        'live': 'captions, headers, small QR, large QR (+ backdrop), past-video thumbnail (+ backdrop)',
     }
     for L in manifest['layers']:
         if live(L):
