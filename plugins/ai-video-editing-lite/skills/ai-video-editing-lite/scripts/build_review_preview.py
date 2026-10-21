@@ -61,6 +61,55 @@ def make_proxy(src, cache_dir, height=PROXY_HEIGHT, log=None):
     return out, False
 
 
+WAVE_RATE = 100      # waveform points per second (the review page draws the sound under the captions)
+
+
+def make_wave(src, cache_dir, log=None):
+    """Peak level of every 10 ms of a clip source's own sound, as bytes 0..255 (= -60..0 dBFS). Cached by file identity.
+    The page draws it through the clips (source time), so it follows cuts changed on the page."""
+    key = short_hash(f'{file_identity(src)}|wave{WAVE_RATE}-v1')
+    out = cache_dir / f'{key}.bin'
+    if out.exists() and out.stat().st_size > 0:
+        return out
+    import numpy as np
+    rate = 8000
+    pcm = subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-i', str(src), '-vn', '-ac', '1', '-ar', str(rate), '-f', 's16le', '-'],
+                         capture_output=True, check=False).stdout
+    x = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
+    hop = rate // WAVE_RATE
+    n = len(x) // hop
+    if n == 0:
+        return None
+    peak = np.abs(x[:n * hop].reshape(n, hop)).max(axis=1)
+    db = 20 * np.log10(np.maximum(peak, 1e-6))
+    v = np.clip((db + 60) / 60 * 255, 0, 255).astype(np.uint8)
+    tmp = out.with_name(f'.tmp-{key}-{os.getpid()}.bin')
+    tmp.write_bytes(v.tobytes())
+    tmp.replace(out)
+    return out
+
+
+def sound_of_clips(plan):
+    """Which file holds the sound of each clip source. A camera proxy without sound (the voice is laid as its own audio,
+    e.g. a cleaned voice track that runs in the camera's source time) takes the voice track whose events start with
+    its clips at the same source time."""
+    out = {}
+    voice = [a for a in plan.get('audio', []) if a.get('kind') == 'voice' or 'voice' in Path(a['path']).stem.lower()]
+    for c in plan['clips']:
+        src = str(Path(c['path']).resolve())
+        if src in out:
+            continue
+        meta = ro.probe(src)
+        if any(st.get('codec_type') == 'audio' for st in meta.get('streams', [])):
+            out[src] = src
+            continue
+        hit = next((a for a in voice if a['start'] == c['start'] and
+                    abs(float(a.get('source_start_seconds', 0)) - float(c.get('source_start_seconds', 0))) < 0.05), None)
+        if hit:
+            out[src] = str(Path(hit['path']).resolve())
+    return out
+
+
 def audio_key(plan):
     used = [c['path'] for c in plan['clips'] if not c.get('mute')] + [a['path'] for a in plan.get('audio', [])]
     relevant = {
@@ -166,6 +215,14 @@ def build(case, plan_path, name, height=PROXY_HEIGHT, jobs=3):
         video_key[src] = register(proxy, 'video', {'source': src, 'src_w': sw, 'src_h': sh,
                                                    'proxy_w': pw, 'proxy_h': ph, 'proxy_cached': cached})
 
+    # the sound of each camera / insert source, for the waveform lane of the page
+    wave_cache = case / '.akari/cache/preview-waves'
+    wave_cache.mkdir(parents=True, exist_ok=True)
+    waves = {}
+    for src, path in sound_of_clips(plan).items():
+        w = make_wave(path, wave_cache)
+        if w is not None:
+            waves[video_key[src]] = register(w, 'wave')
     audio_path, audio_cached = build_audio(plan, fps, media, audio_cache, out_dir)
     audio = register(audio_path, 'audio', {'cached': audio_cached})
 
@@ -198,6 +255,7 @@ def build(case, plan_path, name, height=PROXY_HEIGHT, jobs=3):
         'frames': plan['frames'], 'width': plan['width'], 'height': plan['height'],
         'audio': audio, 'clips': clips, 'camera': plan.get('camera', []), 'layers': layers,
         'marks': marks_from(plan, plan_path),
+        'waves': waves, 'wave_rate': WAVE_RATE,
         'speakers': plan.get('speakers') or {'K': '本人', 'S': '相手'},   # 確認画面の話し手の呼び名
         'media': {k: {kk: vv for kk, vv in v.items() if kk not in ('path', 'source')} for k, v in table.items()},
         'note': 'Review preview composited live in the browser from the plan. Video is a proxy; '

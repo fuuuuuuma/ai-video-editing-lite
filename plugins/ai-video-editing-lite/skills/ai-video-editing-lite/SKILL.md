@@ -51,7 +51,7 @@ description: 自分の YouTube チャンネルの編集の作風（字幕・強�
 6. `PY scripts/build.py plan <案件>` → `planning/render-plan-vN.json`。
 7. 冒頭を `PY scripts/render_offline.py <plan> --preview --preview-seconds 8` で書き出し（`<案件>/.akari/work/offline-*/preview.mp4`）、コマを抜いて見て、字幕の位置・縁・大きさが学んだ作風と合っているか確かめる。強調は `.akari/cache/caption-png/` の絵を見る。合っていなければ style か emphasis を直して 6 に戻る。
 8. 見てもらう（[references/review.md](references/review.md)）:
-   - MIRU を使う: `PY scripts/build_review_preview.py <案件> --plan <plan>` → `PY scripts/miru_sync.py publish <案件> --preview vN` → 出たリンクを送る。
+   - MIRU を使う: `PY scripts/build_review_preview.py <案件> --plan <plan>` → `PY scripts/build_flat_preview.py <案件> --name vN`（軽い再生。10 分を超える動画は必ず・裏で動かす）→ `PY scripts/miru_sync.py publish <案件> --preview vN` → 出たリンクを送る。
    - 手元だけ: `PY scripts/review_server.py <案件>`（http://localhost:8765/）。
 9. 修正指示が来たら `miru_sync.py pull`（手元は不要）→ 指示を読んで cuts / captions / emphasis を直す・画面での手直しは `review_edits.py apply` で次の plan に当てる → 新しい版を作って 8 へ。各指示に `miru_sync.py reply`（手元は `review_comments.py reply`）で返事。
 10. 利用者が「書き出して」と言ったら `PY scripts/render_offline.py <plan> --output <案件>/exports/<名前>_vN.mp4 --jobs 4`。書き出した MP4 からコマを抜いて見る（冒頭・強調それぞれ・最後。強調の出力フレームは plan の layers の caption_kind=emphasis）、`ffmpeg -i <mp4> -af ebur128=peak=true -f null -` で音の大きさ（-14 LUFS 前後・ピーク -1 dB 以下）を確かめる。

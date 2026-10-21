@@ -118,6 +118,7 @@ body.ready main{opacity:1; transform:none}
 #base{position:absolute; left:0; top:0; width:1920px; height:1080px; transform-origin:0 0; z-index:1}
 #base video{position:absolute; left:0; top:0; width:1920px; height:1080px; object-fit:cover; visibility:hidden}
 #stage .lv{position:absolute; visibility:hidden; object-fit:fill}
+#flat{position:absolute; left:0; top:0; width:1920px; height:1080px; object-fit:fill; z-index:2; visibility:hidden}
 #stage .li{position:absolute; transform-origin:0 0; pointer-events:none}
 /* a large QR / thumbnail selected on the timeline: drag to move it, pull a corner to resize it (aspect kept) */
 /* sizes in screen pixels whatever the picture's scale: --u is one screen pixel on the 1920 frame */
@@ -180,7 +181,7 @@ body.ready main{opacity:1; transform:none}
 /* timelines */
 #timeline{padding:12px; border-radius:var(--r-lg); display:flex; flex-direction:column; gap:10px}
 canvas{display:block; width:100%; border-radius:12px; cursor:pointer; touch-action:none}
-#detail{height:142px; background:rgba(255,255,255,.72); box-shadow:inset 0 0 0 1px rgba(60,60,67,.07)}
+#detail{height:176px; background:rgba(255,255,255,.72); box-shadow:inset 0 0 0 1px rgba(60,60,67,.07)}
 #detail.edge{cursor:ew-resize}
 #tlbar{display:flex; align-items:center; gap:8px 10px; flex-wrap:wrap; min-height:34px; padding:0 2px}
 #cutCard{display:flex; align-items:center; gap:6px 8px; flex-wrap:wrap; min-width:0; font-size:12px; color:var(--text2)}
@@ -428,7 +429,7 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
     <div class="sk-left">
       <div class="sk dark sk-stage"><span>読み込み中</span></div>
       <div class="glass sk-panel"><div class="row" style="gap:10px"><div class="sk" style="width:46px;height:46px;border-radius:50%"></div><div class="sk" style="width:300px;height:34px"></div><div class="sk" style="width:150px;height:34px"></div></div><div class="row" style="gap:8px"><div class="sk" style="width:120px;height:34px"></div><div class="sk" style="width:120px;height:34px"></div><div class="sk" style="width:120px;height:34px"></div><div class="sk" style="width:120px;height:34px"></div></div></div>
-      <div class="glass sk-panel"><div class="sk" style="height:142px"></div><div class="sk" style="height:58px"></div><div class="sk" style="height:12px;width:60%"></div></div>
+      <div class="glass sk-panel"><div class="sk" style="height:176px"></div><div class="sk" style="height:58px"></div><div class="sk" style="height:12px;width:60%"></div></div>
     </div>
     <div class="glass sk-right">
       <div class="sk" style="height:190px;border-radius:20px"></div>
@@ -459,6 +460,7 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
     <dt><kbd>K</kbd></dt><dd>停止</dd>
     <dt><kbd>Z</kbd></dt><dd>再生に戻る</dd>
     <dt><kbd>C</kbd></dt><dd>再生速度 1 → 1.5 → 2 倍（止めると 1 倍に戻る）</dd>
+    <dt><kbd>V</kbd></dt><dd>軽い再生（映像を1本の軽い動画で流す）の入り切り</dd>
     <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>1コマ戻る / 進む</dd>
     <dt><kbd>⇧</kbd>+<kbd>←</kbd> <kbd>→</kbd></dt><dd>1秒戻る / 進む</dd>
     <dt><kbd>J</kbd> <kbd>L</kbd></dt><dd>5秒戻る / 進む</dd>
@@ -523,6 +525,7 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
         <div class="seg" id="rate" title="再生速度（C で 1 → 1.5 → 2 倍。止めると 1 倍に戻る）">
           <button data-r="0.5">0.5×</button><button data-r="1" class="on">1×</button><button data-r="1.25">1.25×</button><button data-r="1.5">1.5×</button><button data-r="2">2×</button>
         </div>
+        <button class="btn sm" id="flatBtn" hidden title="映像を1本の軽い動画で流す（字幕・強調・大型QR・サムネはその上で直せる）。V で切り替え">軽い再生</button>
       </div>
       <div class="trow nav">
         <div class="navg"><button data-nav="cap" data-d="-1" title="前の字幕" aria-label="前の字幕"></button><span>字幕</span><button data-nav="cap" data-d="1" title="次の字幕" aria-label="次の字幕"></button></div>
@@ -664,6 +667,39 @@ function sameTimeline(it){ return it.preview===M.name && (it.cut_rev||'')===(M.c
 function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function anim(el, frames, opts){ if(RM.matches || !el.animate) return null; return el.animate(frames, {duration:320, easing:'cubic-bezier(.32,.72,0,1)', ...opts}); }
 
+// ---------------------------------------------------------------- flat video (build_flat_preview.py; 2026-10-21)
+// One light stream holds every picture the page cannot change (the cut camera with its push-ins, screen recordings,
+// wipes, frames, headers…). Captions, the large QR and a past video's thumbnail stay live on top. Each clip of the
+// current timeline is mapped back to the flat video by source time; a clip it does not hold (a restored cut) is
+// drawn live from the proxies as before.
+let flatEl=null, flatOn=false;
+const isLive=L=>L.role==='caption' || /^(qr-q|qrbg-|thumb)/.test(String(L.id||''));
+function setupFlat(){
+  const segs=(M.flat&&M.flat.segments)||[]; const by=new Map();
+  for(const g of segs){ if(!by.has(g.media)) by.set(g.media,[]); by.get(g.media).push(g); }
+  // the same source moment can appear twice (the avan, the end card): take the copy nearest on the timeline, and only
+  // within 2 minutes of where the clip now sits (a cut changed on the page moves the timeline by its length)
+  for(const c of clips){ c.flatT=null; const d=(c.end-c.start)/FPS; let best=1e9;
+    for(const g of by.get(c.media)||[]){ const gd=(g.end-g.start)/FPS;
+      if(c.src>=g.src-0.5/FPS && c.src+d<=g.src+gd+0.5/FPS){ const at=g.start+(c.src-g.src)*FPS, dist=Math.abs(at-c.start);
+        if(dist<best && dist<=120*FPS){ best=dist; c.flatT=at/FPS; } } } }
+  const btn=$('#flatBtn'); if(!M.flat){ if(btn) btn.hidden=true; flatOn=false; if(flatEl) flatEl.style.visibility='hidden'; return; }
+  if(!flatEl){ flatEl=document.createElement('video'); flatEl.id='flat'; flatEl.muted=true; flatEl.playsInline=true; flatEl.preload='auto'; $('#stage').appendChild(flatEl); }
+  const url=mediaUrl(M.flat.media); if(!flatEl.src.endsWith(url)) flatEl.src=url;
+  let pref=null; try{ pref=localStorage.getItem('review-flat'); }catch{}
+  flatOn=pref!=='0'; if(btn){ btn.hidden=false; btn.classList.toggle('on',flatOn); btn.onclick=toggleFlat; }
+}
+function toggleFlat(){ if(!M.flat){ hud('この版には軽い再生の動画がありません'); return; } flatOn=!flatOn;
+  try{ localStorage.setItem('review-flat',flatOn?'1':'0'); }catch{}
+  $('#flatBtn').classList.toggle('on',flatOn); hud(flatOn?'軽い再生：入':'軽い再生：切（全部その場で重ねる）');
+  for(const [k,el] of domLayers){ el.remove(); } domLayers.clear(); for(const uid of [...assigned.keys()]) release(uid); render(true); }
+function syncFlat(c, f, playing){
+  const el=flatEl; el.style.visibility='visible'; el.playbackRate=audio.playbackRate;
+  if(playing){ const exp=c.flatT+(audio.currentTime*FPS-c.start)/FPS; if(el.paused) el.play().catch(()=>{});
+    if(!el.seeking && Math.abs(el.currentTime-exp)>0.12) el.currentTime=exp; }
+  else { if(!el.paused) el.pause(); const e2=c.flatT+(f+0.5-c.start)/FPS; if(!el.seeking && Math.abs(el.currentTime-e2)>0.4/FPS) el.currentTime=e2; }
+}
+
 // ---------------------------------------------------------------- video slots (engine)
 const slots = []; const assigned = new Map();
 function makeSlot(key, isBase){
@@ -702,12 +738,16 @@ function ensureDom(L){
 
 let lastF=-1;
 function render(force){
-  const f=frameNow(); const playing=!audio.paused;
+  // the sound is waiting for data (readyState < 3): the pictures wait with it, so they never run ahead of the voice
+  const f=frameNow(); const playing=!audio.paused && !(audio.readyState<3);
   // base clips: current + next ones within 1.5 s are kept ready
   const ci=Math.max(0,bsearch(clips,f)); const need=new Map();
-  need.set(clips[ci].uid,{it:clips[ci],active:true});
-  for(let k=ci+1;k<Math.min(clips.length,ci+3);k++) if(clips[k].start-f<=45) need.set(clips[k].uid,{it:clips[k],active:false});
-  for(const it of vlayers){ if(it.start<=f && f<it.end) need.set(it.uid,{it,active:true}); else if(it.start>f && it.start-f<=45) need.set(it.uid,{it,active:false}); }
+  const useFlat=flatOn && flatEl && clips[ci].flatT!=null;
+  if(useFlat) syncFlat(clips[ci],f,playing); else if(flatEl){ flatEl.style.visibility='hidden'; if(!flatEl.paused) flatEl.pause(); }
+  if(!useFlat) need.set(clips[ci].uid,{it:clips[ci],active:true});
+  for(let k=ci+1;k<Math.min(clips.length,ci+3);k++) if(clips[k].start-f<=45 && !(flatOn && clips[k].flatT!=null)) need.set(clips[k].uid,{it:clips[k],active:false});
+  for(const it of vlayers){ if(useFlat && !isLive(it.layer)) continue;
+    if(it.start<=f && f<it.end) need.set(it.uid,{it,active:true}); else if(it.start>f && it.start-f<=45) need.set(it.uid,{it,active:false}); }
   for(const uid of [...assigned.keys()]) if(!need.has(uid)) release(uid);
   for(const {it,active} of need.values()){
     const s=acquire(it); const el=s.el; el.playbackRate=audio.playbackRate;
@@ -725,6 +765,7 @@ function render(force){
   $('#base').style.transform=tr;
   // still layers: create shortly before, remove shortly after
   for(const L of olayers){
+    if(useFlat && !isLive(L)){ const el=domLayers.get(L.i); if(el) el.style.display='none'; continue; }
     if(L.start-60<=f && f<L.end+30){ const el=ensureDom(L);
       if(L.start<=f && f<L.end && !hiddenL.has(L.i)){ el.style.display='block'; el.style.left=curve(L,'x',f,0)+'px'; el.style.top=curve(L,'y',f,0)+'px';
         el.style.opacity=curve(L,'opacity',f,1); const sc=curve(L,'scale',f,1); el.style.transform=sc===1?'':`scale(${sc})`; }
@@ -737,8 +778,10 @@ function render(force){
     const c=clips[ci]; UI.src.textContent=`${c.source_name}  ${hms(c.src+(f-c.start)/FPS)}`;
     updateNowCap(f); updateTranscript(f); updateRange(f); renderCutCard(); tlDirty=true; }
 }
+let waitHud=0;
 function loop(){
   if(playUntil!=null && !audio.paused && audio.currentTime*FPS >= playUntil){ playUntil=null; audio.pause(); }
+  if(!audio.paused && audio.readyState<3 && performance.now()-waitHud>1500){ waitHud=performance.now(); hud('音を読み込み中…'); }
   render(false);
   if(!audio.paused || tlDirty){ tlDirty=false; const p=precisePos(); drawDetail(p); drawOverview(p); }
   requestAnimationFrame(loop);
@@ -825,11 +868,35 @@ function fitCanvas(c){ const r=c.getBoundingClientRect(); const d=window.deviceP
   if(c.width!==w||c.height!==h){ c.width=w; c.height=h; } const g=c.getContext('2d'); g.setTransform(d,0,0,d,0,0); return {g,W:r.width,H:r.height}; }
 function rr(g,x,y,w,h,r){ if(w<=0) return; r=Math.min(r,w/2,h/2); g.beginPath(); if(g.roundRect) g.roundRect(x,y,w,h,r); else g.rect(x,y,w,h); g.fill(); }
 function clipText(g,txt,x0,x1,y,color){ if(x1-x0<14) return; g.save(); g.beginPath(); g.rect(x0,y-10,x1-x0,20); g.clip(); g.fillStyle=color; g.fillText(txt,Math.max(x0+6, 6),y); g.restore(); }
-const LANES={ruler:[0,18], marks:[22,44], caps:[49,79], cuts:[84,96], notes:[101,123]};
+const LANES={ruler:[0,18], marks:[22,44], caps:[49,79], wave:[83,115], cuts:[119,131], notes:[136,158]};
 let capDrag=null;   // {b0, b, left:[caps], right:[caps]} while an edge is dragged
 let selCaps=new Set(), capBox=null;   // captions picked on the timeline (cap keys); the box dragged from an empty spot
 function capSpan(L){ if(capDrag){ if(capDrag.left.includes(L)) return [L.start,capDrag.b]; if(capDrag.right.includes(L)) return [capDrag.b,L.end]; } return [L.start,L.end]; }
 function tickStep(){ const want=spanS*2/7; for(const st of [0.2,0.5,1,2,5,10,15,30]) if(st>=want) return st; return 30; }
+// ---------------------------------------------------------------- waveform (build_review_preview.py: 0..255 = -60..0 dB, 100 per second)
+// drawn through the clips by source time, so it follows cuts changed on the page
+const waveData=new Map();
+function waveOf(mediaKey){ const k=M.waves&&M.waves[mediaKey]; if(!k) return null; let w=waveData.get(k);
+  if(w===undefined){ waveData.set(k,null); fetch(mediaUrl(k)).then(r=>r.ok?r.arrayBuffer():null).then(b=>{ if(b){ const w=new Uint8Array(b);
+    // the room's noise floor (the 25th percentile of a sample) is drawn flat, so the gaps between words stand out
+    const smp=[]; for(let i=0;i<w.length;i+=Math.max(1,Math.floor(w.length/4000))) smp.push(w[i]); smp.sort((p,q)=>p-q);
+    w.floor=smp[Math.floor(smp.length*.25)]||0; waveData.set(k,w); tlDirty=true; } }).catch(()=>{}); return null; }
+  return w; }
+function drawWave(g,a,b,x,W){
+  const [y0,y1]=LANES.wave, mid=(y0+y1)/2, half=(y1-y0)/2-2, R=M.wave_rate||100;
+  g.fillStyle='rgba(118,118,128,.055)'; rr(g,4,y0,W-8,y1-y0,8);
+  if(!M.waves) return;
+  const fpp=(b-a)/W; g.fillStyle='rgba(72,72,80,.55)';
+  let ci=Math.max(0,bsearch(clips,Math.max(0,a)));
+  for(let px=0; px<W; px++){ const f0=a+px*fpp, f1=f0+fpp; if(f1<0||f0>=M.frames) continue;
+    while(ci<clips.length-1 && clips[ci].end<=f0) ci++;
+    let peak=0, floor=0;
+    for(let k=ci; k<clips.length && clips[k].start<f1; k++){ const c=clips[k], w=waveOf(c.media); if(!w) continue;
+      const s0=c.src+(Math.max(f0,c.start)-c.start)/FPS, s1=c.src+(Math.min(f1,c.end)-c.start)/FPS;
+      floor=w.floor||0;
+      for(let i=Math.floor(s0*R), e=Math.max(i+1,Math.ceil(s1*R)); i<e && i<w.length; i++) if(i>=0 && w[i]>peak) peak=w[i]; }
+    const u=Math.max(0,(peak-floor)/Math.max(1,255-floor));
+    if(peak>0){ const h=Math.max(.5,Math.pow(u,1.4)*half); g.fillRect(px,mid-h,1,h*2); } } }
 function drawDetail(pos){
   const c=$('#detail'); const {g,W,H}=fitCanvas(c); g.clearRect(0,0,W,H);
   const span=spanS*FPS, a=pos-span, b=pos+span, x=fr=>(fr-a)/(b-a)*W;
@@ -862,6 +929,8 @@ function drawDetail(pos){
       if(L.edit||L.add||L.time){ g.fillStyle=PAL['c-edit']; rr(g,x0+2,y0+2,Math.max(0,x1-x0-4),3.5,1.75); } }
     if(capDrag){ g.fillStyle=PAL.accent; g.fillRect(x(capDrag.b)-1,y0-2,2,y1-y0+4);
       g.font='600 10.5px ui-monospace,Menlo,monospace'; g.textAlign='center'; g.fillText(tc(capDrag.b),Math.max(36,Math.min(W-36,x(capDrag.b))),y0-6); g.textAlign='left'; } }
+  // the sound
+  drawWave(g,a,b,x,W);
   // cut points
   { const [y0,y1]=LANES.cuts; g.fillStyle=PAL['c-cut'];
     for(const cf of cutFrames){ if(cf<a||cf>b) continue; const xx=x(cf); g.globalAlpha=.35; g.fillRect(xx-.5,LANES.caps[0],1,y1-LANES.caps[0]); g.globalAlpha=1;
@@ -878,7 +947,7 @@ function drawDetail(pos){
       clipText(g,(v.it.replacement!=null?'字幕 → '+v.it.replacement:(v.it.text||'')).replace(/\s+/g,' '),v.x0+2,lim,(y0+y1)/2,done?PAL.text3:PAL.text); }); }
   // lane labels
   g.font='600 10px -apple-system,"Hiragino Sans",sans-serif';
-  for(const [k,label] of [['marks','演出'],['caps','字幕'],['cuts','カット'],['notes','指示']]){ const [y0,y1]=LANES[k]; const w=g.measureText(label).width+10;
+  for(const [k,label] of [['marks','演出'],['caps','字幕'],['wave','音'],['cuts','カット'],['notes','指示']]){ const [y0,y1]=LANES[k]; const w=g.measureText(label).width+10;
     g.fillStyle='rgba(255,255,255,.88)'; rr(g,6,(y0+y1)/2-8,w,16,5); g.fillStyle=PAL.text2; g.fillText(label,11,(y0+y1)/2+.5); }
   // the box being dragged around captions
   if(capBox && capBox.moved){ const xa=x(Math.min(capBox.f0,capBox.f1)), xb=x(Math.max(capBox.f0,capBox.f1)), ya=Math.min(capBox.y0,capBox.y1), yb=Math.max(capBox.y0,capBox.y1);
@@ -1753,6 +1822,7 @@ function loadTimeline(){
   captionLayers.sort((a,b)=>a.start-b.start||a.i-b.i); M.camera.sort((a,b)=>a.start-b.start);
   for(let i=1;i<clips.length;i++){ const p=clips[i-1], c=clips[i]; if(p.media!==c.media || Math.abs(p.src+(p.end-p.start)/FPS-c.src)>1.5/FPS) cutFrames.push(c.start); }
   markStarts=[...new Set(M.marks.map(m=>m.start))].sort((a,b)=>a-b);
+  setupFlat();
 }
 async function init(){
   M=await fetch('/api/manifest').then(r=>{ if(!r.ok) throw new Error('manifest '+r.status); return r.json(); }); FPS=M.fps_num/M.fps_den;
@@ -1836,6 +1906,7 @@ async function init(){
     else if(c==='KeyD') trimTo(1);
     else if(c==='KeyA' && e.shiftKey) openAdd();
     else if(c==='KeyA') trimTo(-1);
+    else if(c==='KeyV') toggleFlat();
     else if(c==='KeyC' && e.shiftKey) copyTc();
     else if(c==='KeyC') cycleRate();
     else if(c==='KeyX'){ audio.pause(); $('#note').focus(); }
