@@ -387,6 +387,26 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
 @keyframes bump{0%{transform:scale(1)} 40%{transform:scale(1.3); background:var(--accent); color:#fff} 100%{transform:scale(1)}}
 @keyframes flash{0%{opacity:0; transform:scale(.7)} 25%{opacity:1; transform:scale(1)} 100%{opacity:0; transform:scale(1.25)}}
 
+/* ------------------------------------------------ parts put away (2026-10-21: the picture larger, the timeline always there) */
+:root.fold-header{--header-h:0px}
+:root.fold-header header{display:none}
+:root.fold-transport #transport{display:none}
+:root.fold-nav #transport .trow.nav{display:none}
+:root.fold-cut #cutCard, :root.fold-cut #selBar{display:none}
+:root.fold-ov #ovWrap, :root.fold-ov #legend{display:none}
+:root.fold-right main{grid-template-columns:minmax(0,1fr)}
+:root.fold-right #right{display:none}
+#foldBtn{position:fixed; right:14px; bottom:14px; z-index:300; width:38px; height:38px; border-radius:50%; border:0; cursor:pointer;
+  background:var(--glass-strong); box-shadow:0 6px 18px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06); color:var(--text); display:grid; place-items:center}
+#foldBtn svg{width:18px; height:18px}
+#foldMenu{position:fixed; right:14px; bottom:60px; z-index:300; padding:10px 12px; border-radius:14px; background:var(--glass-strong);
+  box-shadow:0 12px 30px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06); font-size:12.5px; display:none; min-width:220px}
+#foldMenu.open{display:block}
+#foldMenu h4{margin:0 0 6px; font-size:12px; color:var(--text2); font-weight:600}
+#foldMenu label{display:flex; align-items:center; gap:8px; padding:4px 2px; cursor:pointer; white-space:nowrap}
+#foldMenu .row{display:flex; gap:6px; margin-top:8px}
+#foldMenu .row button{flex:1}
+
 /* ------------------------------------------------ responsive */
 @media (max-width:1200px){ main,.sk-main{grid-template-columns:minmax(0,1fr) 360px} }
 @media (max-width:960px){
@@ -442,6 +462,17 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
 </div>
 
 <!-- ============================================================ header -->
+<button id="foldBtn" title="しまう・出す（H でタイムライン以外を全部しまう／戻す）" aria-label="しまう・出す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 15h18M8 4v11"/></svg></button>
+<div id="foldMenu" role="dialog" aria-label="しまう・出す">
+  <h4>しまう（チェックを外すと隠れる）</h4>
+  <label><input type="checkbox" data-fold="header" checked> 上のバー</label>
+  <label><input type="checkbox" data-fold="transport" checked> 再生の操作</label>
+  <label><input type="checkbox" data-fold="nav" checked> 字幕・カット・演出・指示へ移る</label>
+  <label><input type="checkbox" data-fold="cut" checked> カット点の情報</label>
+  <label><input type="checkbox" data-fold="ov" checked> 全体図と色の説明</label>
+  <label><input type="checkbox" data-fold="right" checked> 右の欄（字幕一覧・修正指示）</label>
+  <div class="row"><button class="btn sm" data-foldall="1">タイムライン以外をしまう</button><button class="btn sm" data-foldall="0">全部出す</button></div>
+</div>
 <header>
   <h1 id="title">編集プレビュー</h1>
   <span class="pill" id="ver">-</span>
@@ -461,6 +492,7 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
     <dt><kbd>Z</kbd></dt><dd>再生に戻る</dd>
     <dt><kbd>C</kbd></dt><dd>再生速度 1 → 1.5 → 2 倍（止めると 1 倍に戻る）</dd>
     <dt><kbd>V</kbd></dt><dd>軽い再生（映像を1本の軽い動画で流す）の入り切り</dd>
+    <dt><kbd>H</kbd></dt><dd>タイムライン以外を全部しまう／戻す（右下のボタンで1つずつ選べる）</dd>
     <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>1コマ戻る / 進む</dd>
     <dt><kbd>⇧</kbd>+<kbd>←</kbd> <kbd>→</kbd></dt><dd>1秒戻る / 進む</dd>
     <dt><kbd>J</kbd> <kbd>L</kbd></dt><dd>5秒戻る / 進む</dd>
@@ -768,7 +800,7 @@ function render(force){
   // still layers: create shortly before, remove shortly after
   for(const L of olayers){
     if(useFlat && !isLive(L)){ const el=domLayers.get(L.i); if(el) el.style.display='none'; continue; }
-    if(L.start-60<=f && f<L.end+30){ const el=ensureDom(L);
+    if(L.start-150<=f && f<L.end+30){ const el=ensureDom(L);
       if(L.start<=f && f<L.end && !hiddenL.has(L.i)){ el.style.display='block'; el.style.left=curve(L,'x',f,0)+'px'; el.style.top=curve(L,'y',f,0)+'px';
         el.style.opacity=curve(L,'opacity',f,1); const sc=curve(L,'scale',f,1); el.style.transform=sc===1?'':`scale(${sc})`; }
       else el.style.display='none'; }
@@ -1801,6 +1833,24 @@ async function copyTc(){ const t=tc(frameNow()); const b=$('#tcCopy');
 let stageScale=1;
 // the whole page fits the window without scrolling up and down (2026-10-21): the picture takes the height the controls
 // and the timeline leave (measured, so a wrapped line or a taller timeline is counted)
+const FOLDS=['header','transport','nav','cut','ov','right'];
+let folds=new Set(); try{ folds=new Set(JSON.parse(localStorage.getItem('review-folds')||'[]').filter(k=>FOLDS.includes(k))); }catch{}
+function applyFolds(){ const root=document.documentElement; for(const k of FOLDS) root.classList.toggle('fold-'+k, folds.has(k));
+  document.querySelectorAll('#foldMenu [data-fold]').forEach(c=>{ c.checked=!folds.has(c.dataset.fold); });
+  try{ localStorage.setItem('review-folds', JSON.stringify([...folds])); }catch{}
+  requestAnimationFrame(()=>{ fitLayout(); if(typeof fitStage==='function' && typeof M!=='undefined' && M) fitStage(); tlDirty=true; }); }
+let lastFolds=null;
+function toggleFoldAll(){ const all=FOLDS.every(k=>folds.has(k));
+  if(all){ folds=new Set(lastFolds&&lastFolds.length<FOLDS.length?lastFolds:[]); hud('しまった所を出しました'); }
+  else { lastFolds=[...folds]; folds=new Set(FOLDS); hud('タイムライン以外をしまいました（H で戻す・右下のボタンで選ぶ）'); }
+  applyFolds(); }
+function setupFolds(){
+  $('#foldBtn').onclick=e=>{ e.stopPropagation(); $('#foldMenu').classList.toggle('open'); };
+  $('#foldMenu').addEventListener('click',e=>e.stopPropagation());
+  document.addEventListener('click',()=>$('#foldMenu').classList.remove('open'));
+  document.querySelectorAll('#foldMenu [data-fold]').forEach(c=>c.onchange=()=>{ if(c.checked) folds.delete(c.dataset.fold); else folds.add(c.dataset.fold); applyFolds(); });
+  document.querySelectorAll('#foldMenu [data-foldall]').forEach(b=>b.onclick=()=>{ folds=new Set(b.dataset.foldall==='1'?FOLDS:[]); applyFolds(); });
+  applyFolds(); }
 function fitLayout(){
   if(innerWidth<=960){ document.documentElement.style.removeProperty('--stage-max-h'); return; }
   const left=$('#left'); if(!left) return; const cs=getComputedStyle(document.documentElement);
@@ -1921,6 +1971,7 @@ async function init(){
     else if(c==='KeyA' && e.shiftKey) openAdd();
     else if(c==='KeyA') trimTo(-1);
     else if(c==='KeyV') toggleFlat();
+    else if(c==='KeyH') toggleFoldAll();
     else if(c==='KeyC' && e.shiftKey) copyTc();
     else if(c==='KeyC') cycleRate();
     else if(c==='KeyX'){ audio.pause(); $('#note').focus(); }
@@ -1947,7 +1998,7 @@ async function init(){
   let tab='caps'; try{ tab=localStorage.getItem('review.tab')||'caps'; }catch{} setTab(['notes','edits'].includes(tab)?tab:'caps',false);
   new ResizeObserver(()=>{ fitStage(); tlDirty=true; render(true); }).observe($('#stageWrap')); fitStage();
   { const ro=new ResizeObserver(()=>fitLayout()); for(const el of $('#left').children) if(el.id!=='stageWrap') ro.observe(el);
-    addEventListener('resize',fitLayout); fitLayout(); }
+    addEventListener('resize',fitLayout); fitLayout(); setupFolds(); }
   new ResizeObserver(()=>{ tlDirty=true; }).observe($('#timeline'));
   // refresh notes written by the agent (status/reply) without reloading
   setInterval(async()=>{ if(document.activeElement && ['TEXTAREA','INPUT'].includes(document.activeElement.tagName)) return;

@@ -713,7 +713,7 @@ class Edit:
             self.retimed.append({'kind': kind, 'id': tid, 'from': [s0, e0], 'to': [a, b]})
             return
         if kind == 'emphasis':
-            normal = [x for x in layers if x.get('role') == 'caption' and x.get('caption_kind', 'normal') != 'emphasis']
+            normal = [x for x in layers if x.get('role') == 'caption' and not x.get('parked') and x.get('caption_kind', 'normal') != 'emphasis']
             prev = [x for x in normal if x['end'] == s0]
             nxt = [x for x in normal if x['start'] == e0]
             a = max([a] + [x['start'] + MIN_CAP for x in prev])
@@ -923,7 +923,7 @@ class Edit:
     def apply_caption_times(self, items):
         caps = {}
         for L in self.plan.get('layers', []):
-            if L.get('role') == 'caption':
+            if L.get('role') == 'caption' and not L.get('parked'):     # a caption parked under a screen recording is not on screen
                 caps.setdefault(L.get('id'), L)
                 caps.setdefault(L.get('caption_id') or L.get('id'), L)
         moved = []
@@ -938,7 +938,7 @@ class Edit:
             if L is None:      # the plan was rebuilt and the ids moved: the same words at the same place in the source
                 f = self.frame_kept(it.get('source') or it.get('start_source'), it.get('old_frame', it.get('frame', 0)), 1)
                 if f is not None and words:
-                    L = next((x for x in self.plan.get('layers', []) if x.get('role') == 'caption' and x['start'] - 20 <= f < x['end'] + 20
+                    L = next((x for x in self.plan.get('layers', []) if x.get('role') == 'caption' and not x.get('parked') and x['start'] - 20 <= f < x['end'] + 20
                               and x.get('text', '').replace('\n', '') in words), None)
             if L is None:
                 self.warnings.append(f"caption {it.get('caption_id')}: not in the plan")
@@ -963,7 +963,7 @@ class Edit:
             moved.append(L)
         if moved:   # keep normal captions from overlapping after the moves
             mv = {id(L) for L in moved}
-            normal = sorted((L for L in self.plan['layers'] if L.get('role') == 'caption'
+            normal = sorted((L for L in self.plan['layers'] if L.get('role') == 'caption' and not L.get('parked')
                              and L.get('caption_kind', 'normal') != 'emphasis'), key=lambda L: (L['start'], L['end']))
             for p, q in zip(normal, normal[1:]):
                 if p['end'] > q['start']:
@@ -988,7 +988,7 @@ class Edit:
 
         def find(it):
             for x in layers:
-                if x.get('role') == 'caption' and (x.get('caption_id') or x.get('id')) == it.get('caption_id') \
+                if x.get('role') == 'caption' and not x.get('parked') and (x.get('caption_id') or x.get('id')) == it.get('caption_id') \
                         and x.get('text', '').replace('\n', '') in (str(it.get('old_text', '')).replace('\n', ''),
                                                                     str(it.get('text', '')).replace('\n', '')):
                     return x
@@ -996,7 +996,7 @@ class Edit:
             if f is None:
                 return None
             for x in layers:
-                if x.get('role') == 'caption' and x['start'] - 15 <= f < x['end'] \
+                if x.get('role') == 'caption' and not x.get('parked') and x['start'] - 15 <= f < x['end'] \
                         and x.get('text', '').replace('\n', '') == str(it.get('old_text', '')).replace('\n', ''):
                     return x
             return None
@@ -1008,7 +1008,7 @@ class Edit:
                 L = find(it)
                 if L is None:
                     f = self.frame_of(it.get('source'), it.get('frame', 0))
-                    done = f is not None and any(x.get('role') == 'caption' and x['start'] - 20 <= f < x['end'] + 20
+                    done = f is not None and any(x.get('role') == 'caption' and not x.get('parked') and x['start'] - 20 <= f < x['end'] + 20
                                                  and x.get('text', '').replace('\n', '') == str(it.get('text', '')).replace('\n', '')
                                                  for x in layers)
                     if not done:       # a rebuilt plan may already carry the new words
@@ -1027,7 +1027,7 @@ class Edit:
                 L = find(it)
                 if L is None:
                     continue
-                prev = [x for x in layers if x is not L and x.get('role') == 'caption' and x['end'] == L['start']]
+                prev = [x for x in layers if x is not L and x.get('role') == 'caption' and not x.get('parked') and x['end'] == L['start']]
                 for x in prev:      # the caption before holds through, so the track keeps no gap
                     x['end'] = L['end']
                 layers.remove(L)
@@ -1041,7 +1041,7 @@ class Edit:
                 b = e + 1
                 spk = it.get('speaker') or 'K'
                 png, x, y = caption_style.render(style, 'normal', it['text'], spk, None, cache_dir)
-                for c in [c for c in layers if c.get('role') == 'caption' and c.get('caption_kind', 'normal') != 'emphasis'
+                for c in [c for c in layers if c.get('role') == 'caption' and not c.get('parked') and c.get('caption_kind', 'normal') != 'emphasis'
                           and c['start'] < b and a < c['end']]:
                     if c['start'] < a and c['end'] > b:
                         right = {**c, 'start': b}
@@ -1117,7 +1117,7 @@ def check_carried(plan, groups, frames_of=None):
     state: ok (in the plan as made), later (a later fix of the same place changed it), ng (missing)."""
     ed = Edit(plan)
     total = plan['frames']
-    caps = [L for L in plan.get('layers', []) if L.get('role') == 'caption']
+    caps = [L for L in plan.get('layers', []) if L.get('role') == 'caption' and not L.get('parked')]
     allit = [(v, it) for v, its in groups for it in sorted(its, key=lambda x: str(x.get('created', '')))]
     rows = []
 
