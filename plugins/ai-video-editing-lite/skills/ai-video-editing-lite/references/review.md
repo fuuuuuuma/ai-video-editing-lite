@@ -14,12 +14,10 @@
 **上げる:**
 ```
 PY scripts/build_review_preview.py <案件> --plan <案件>/planning/render-plan-vN.json
-PY scripts/build_flat_preview.py <案件> --name vN        # 軽い再生（10 分を超える動画は必ず）
+PY scripts/build_flat_preview.py <案件> --name vN        # 軽い再生（960×540 に焼き込んだ 1 本。字幕・強調は上に重ねたまま直せる）
 PY scripts/miru_sync.py publish <案件> --preview vN
 ```
-- **軽い再生**：カット済みの映像（寄りも込み）を 1 本の 960×540 の軽い動画にまとめる。MIRU の確認画面はそれを 1 本流すだけになり、カットのたびに頭出ししないので、ネット越しでもカクつかない。字幕と強調は今までどおり上に重ね、画面で直せる。作るのに動画の長さと同じくらいかかる（裏で動かし、その間に他の作業を進める）。画面の「軽い再生」ボタンか V キーで入り切り。
-- **音の波形**：確認画面の字幕の下に「音」の段が出る（build_review_preview.py が作る）。言葉の切れ目・言い直しの間が目で見える。画面でカットを直すと波形も一緒に動く。
-- 再生中に音の読み込みが追いつかないときは、映像も一緒に少し止まって「音を読み込み中…」と出る（無音のまま進まない）。
+軽い再生は確認画面の V で切り替える。長い動画をネット越しに見ると、カットごとに映像を読み直すのでカクつく。軽い再生なら 1 本を流すだけで済む。
 - MIRU のチャンネルは、学んだチャンネルの名前で初回に自動で作る（同じ名前が使われていれば後ろに印を付けて作り、記憶に残す）。動画の名前がぶつかったときも同じ（`<案件>/.akari/miru.json`）。
 - 通信が切れても 5 回まで待ってやり直す。止まったら同じコマンドをもう一度実行すると、大きいファイルは続きから上げる。
 - 容量が足りないと「容量が足りません」と止まる。古い版を消してもらうか、利用者に伝える。
@@ -37,6 +35,7 @@ PY scripts/miru_sync.py reply <案件> --note <id> --text "直しました" --st
 
 ```
 PY scripts/build_review_preview.py <案件> --plan <plan>
+PY scripts/build_flat_preview.py <案件> --name vN        # 軽い再生（任意。重いときに）
 PY scripts/review_server.py <案件>        # http://localhost:8765/ （この PC からだけ見られる）
 ```
 修正指示は `planning/review-comments.json` に入る。`PY scripts/review_comments.py <案件> list` で読み、`reply <id> --text … --done` で返事。

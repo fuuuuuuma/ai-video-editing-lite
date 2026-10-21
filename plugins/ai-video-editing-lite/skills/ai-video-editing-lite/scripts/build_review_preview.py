@@ -33,7 +33,7 @@ PROXY_HEIGHT = 720
 SCHEMA = 'ai-video-editing-lite/review-preview-v1'
 LAYER_FIELDS = ('id', 'type', 'start', 'end', 'x', 'y', 'width', 'height', 'opacity', 'scale', 'keyframes',
                 'role', 'caption_id', 'caption_kind', 'speaker', 'text', 'emphasis_role', 'mask',
-                'ring_width', 'ring_color', 'source_crop', 'color')
+                'ring_width', 'ring_color', 'source_crop', 'color', 'parked')
 
 
 def file_identity(path):

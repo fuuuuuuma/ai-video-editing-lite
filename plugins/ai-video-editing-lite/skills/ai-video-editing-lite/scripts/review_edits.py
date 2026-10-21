@@ -33,6 +33,13 @@ Move item (same file, op "retime"): an emphasis or a large QR shown at another t
   clips under the new span, so the blur follows the QR anywhere (user note v9 「QRが入っているのに
   モザイクが入ってない」: the short per-QR blur ran out when the QR moved earlier).
 
+Screen recording moved (op "retime", kind "screen", id "frame-<screen>", 2026-10-21): the frame image, the screen
+  pieces (scr-<screen>-*) and the camera wipe (wipe-<screen>-*) are cut again from the clips under the new span, keeping
+  the screen's own sync (its offset to the camera, measured from the pieces it had). The no-caption region of the screen
+  follows. Normal captions the screen now covers are parked (layers[].parked: kept, never drawn); captions parked under
+  the part it no longer covers come back, and the captions next to it close the gap. A Point outside the new span is
+  warned about.
+
 Place item (same file, op "place"): a large QR or a past-video thumbnail put elsewhere / resized on the page
   target       {"kind": "large_qr" | "thumbnail", "id": its image layer id (qr-q3 / thumb-v9)}
   x, y, width, height   the image's new box on the 1920x1080 frame (integers; the renderer scales the image to it)
@@ -76,7 +83,7 @@ import caption_edits  # noqa: E402
 
 SCHEMA = 'review/cut-edits-v1'
 OPS = ('restore', 'cut', 'retime', 'place')
-RETIME_KINDS = ('emphasis', 'large_qr', 'thumbnail')
+RETIME_KINDS = ('emphasis', 'large_qr', 'thumbnail', 'screen')
 PLACE_KINDS = ('large_qr', 'thumbnail')
 MAX_ITEMS = 2000
 MIN_CAP = 12
@@ -549,6 +556,129 @@ class Edit:
                 if c.get('id') in (f'cam-{lid}', f'cam-{suffix}'):
                     c['start'], c['end'] = a, b
 
+    # -- a screen recording shown over another span (see the module notes)
+    def _retime_screen(self, L, a, b):
+        tid = L['id']; sid = tid[len('frame-'):]
+        s0, e0 = L['start'], L['end']
+        layers, fps = self.plan['layers'], self.fps
+        clips = self.plan.get('clips', [])
+        def cam_at(f):
+            for c in clips:
+                if c['start'] <= f < c['end']:
+                    return c, _src(c) + (f - c['start']) / fps
+            return None, None
+        groups = {}
+        for pre in ('scr', 'wipe'):
+            ps = [x for x in layers if str(x.get('id', '')).startswith(f'{pre}-{sid}-')]
+            if not ps:
+                continue
+            offs = []
+            for x in ps:
+                c, cs = cam_at(x['start'])
+                if c is not None:
+                    offs.append(_src(x) - cs)
+            offs.sort()
+            groups[pre] = (ps, offs[len(offs) // 2] if offs else 0.0)
+        if not groups:
+            self.warnings.append(f'{tid}: no screen pieces; left as it was')
+            return None
+        cam_path = None
+        for pre, (ps, off) in groups.items():
+            c, _ = cam_at(ps[0]['start'])
+            cam_path = cam_path or (c and c['path'])
+        if self.duration_of:      # the screen file has an end: the moved span stops there
+            for pre, (ps, off) in groups.items():
+                dur = self.duration_of(ps[0]['path'])
+                if not dur:
+                    continue
+                for c in clips:
+                    ss, ee = max(a, c['start']), min(b, c['end'])
+                    if ee <= ss or (cam_path and c['path'] != cam_path):
+                        continue
+                    lim = ss + int((dur - (_src(c) + (ss - c['start']) / fps + off)) * fps)
+                    if lim < ee:
+                        b = max(ss, lim)
+                        break
+        if b - a < MIN_CAP:
+            self.warnings.append(f'{tid}: too short after the move; left as it was')
+            return None
+        for pre, (ps, off) in groups.items():
+            at, tpl = layers.index(ps[0]), ps[0]
+            for x in ps:
+                layers.remove(x)
+            new = []
+            for c in clips:
+                ss, ee = max(a, c['start']), min(b, c['end'])
+                if ee <= ss or (cam_path and c['path'] != cam_path):
+                    continue
+                src = _src(c) + (ss - c['start']) / fps + off
+                if src < 0:
+                    continue
+                new.append({**tpl, 'id': f'{pre}-{sid}-{ss}', 'start': ss, 'end': ee, 'source_start_seconds': round(src, 6)})
+            layers[at:at] = new
+        L['start'], L['end'] = a, b
+        # the screen's no-caption region; the regions that keep captions are what is left of the film
+        pol = self.plan.get('caption_policy')
+        if pol:
+            for r in pol.get('excluded_regions', []):
+                if r['start'] == s0 and r['end'] == e0:
+                    r['start'], r['end'] = a, b
+            ex = sorted((r['start'], r['end']) for r in pol.get('excluded_regions', []))
+            cont = []
+            lo = min([r['start'] for r in pol.get('continuous_regions', [])] + [x[0] for x in ex] or [0])
+            hi = max([r['end'] for r in pol.get('continuous_regions', [])] + [x[1] for x in ex] or [self.plan['frames']])
+            f = lo
+            for xs, xe in ex:
+                if xs > f:
+                    cont.append({'start': f, 'end': xs})
+                f = max(f, xe)
+            if f < hi:
+                cont.append({'start': f, 'end': hi})
+            pol['continuous_regions'] = cont
+        # captions: park what the screen covers now, bring back what it no longer covers
+        normal = lambda x: x.get('role') == 'caption' and x.get('caption_kind', 'normal') == 'normal'
+        for x in layers:
+            if normal(x) and not x.get('parked') and x['start'] < b and a < x['end']:
+                if x['start'] < a:
+                    x['end'] = a
+                elif x['end'] > b:
+                    x['start'] = b
+                else:
+                    x['parked'] = True
+        for rs, re_ in ((s0, min(a, e0)), (max(b, s0), e0)):
+            if re_ <= rs:
+                continue
+            for x in layers:
+                if normal(x) and x.get('parked') and x['start'] < re_ and rs < x['end']:
+                    x.pop('parked', None)
+                    x['start'], x['end'] = max(x['start'], rs), min(x['end'], re_)
+        # no gap inside the regions that keep captions, around what changed
+        w0, w1 = min(s0, a) - 1, max(e0, b) + 1
+        ex = [(r['start'], r['end']) for r in (pol or {}).get('excluded_regions', [])]
+        open_ = lambda f0, f1: not any(xs < f1 and f0 < xe for xs, xe in ex)
+        live = sorted((x for x in layers if normal(x) and not x.get('parked')), key=lambda x: x['start'])
+        others = [(x['start'], x['end']) for x in layers if x.get('role') == 'caption' and x.get('caption_kind', 'normal') != 'normal' and not x.get('parked')]
+        for i in range(len(live) - 1):
+            x, nxt = live[i], live[i + 1]
+            if x['end'] < nxt['start'] and x['end'] <= w1 and nxt['start'] >= w0 and open_(x['end'], nxt['start']):
+                inside = [(os_, oe) for os_, oe in others if os_ < nxt['start'] and x['end'] < oe]
+                if inside:       # an emphasis / Point in the gap: the caption after it starts where it ends
+                    e = max(oe for _, oe in inside)
+                    if x['end'] >= min(os_ for os_, _ in inside) and e < nxt['start']:
+                        nxt['start'] = e
+                else:
+                    x['end'] = nxt['start']
+        for r in (pol or {}).get('continuous_regions', []):
+            if not (w0 <= r['start'] <= w1):
+                continue
+            first = next((x for x in live if x['end'] > r['start']), None)
+            if first and first['start'] > r['start'] and first['start'] < r['end'] and open_(r['start'], first['start']):
+                first['start'] = r['start']
+        for x in layers:
+            if x.get('caption_kind') == 'point' and (x['start'] < a or x['end'] > b) and x['start'] < e0 and s0 < x['end']:
+                self.warnings.append(f'{tid}: Point 「{x.get("text", "")}」 is outside the moved screen recording')
+        return a, b
+
     # -- an emphasis or a large QR shown at another time, with what belongs to it
     def retime(self, it):
         tid, kind = it['target']['id'], it['target']['kind']
@@ -565,6 +695,23 @@ class Edit:
         b += 1
         layers = self.plan['layers']
         suffix = tid.split('-', 1)[1] if '-' in tid else tid
+        if kind == 'screen':
+            for x in layers:      # never over an emphasis: the screen stops where it starts / ends
+                if (x.get('caption_kind') == 'emphasis' or str(x.get('id', '')).startswith(('qr-q', 'thumb-'))) \
+                        and not x.get('parked') and x['start'] < b and a < x['end']:     # nor over a large QR / thumbnail
+                    if x['start'] < s0 or x['end'] <= s0:
+                        a = max(a, x['end'])
+                    else:
+                        b = min(b, x['start'])
+            if b - a < MIN_CAP:
+                self.warnings.append(f'{tid}: too short after the move; left as it was')
+                return
+            r = self._retime_screen(L, a, b)
+            if r is None:
+                return
+            a, b = r
+            self.retimed.append({'kind': kind, 'id': tid, 'from': [s0, e0], 'to': [a, b]})
+            return
         if kind == 'emphasis':
             normal = [x for x in layers if x.get('role') == 'caption' and x.get('caption_kind', 'normal') != 'emphasis']
             prev = [x for x in normal if x['end'] == s0]
@@ -695,7 +842,7 @@ class Edit:
         # caption track: no gap inside the regions that keep captions
         cov = np.zeros(p['frames'] + 1, dtype=bool)
         for x in p.get('layers', []):
-            if x.get('role') == 'caption':
+            if x.get('role') == 'caption' and not x.get('parked'):
                 cov[max(0, x['start']):min(p['frames'], x['end'])] = True
         for r in (p.get('caption_policy') or {}).get('continuous_regions', []):
             hole = np.nonzero(~cov[r['start']:r['end']])[0]

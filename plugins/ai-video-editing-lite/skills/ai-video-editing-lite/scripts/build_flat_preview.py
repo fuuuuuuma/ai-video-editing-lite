@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Add a light "flat" video to a built review preview, so the page plays ONE stream instead of many.
 
-Why (2026-10-21: on MIRU the review felt heavy and stuttered): the page composites the edit live
+Why (user 2026-10-21, No.52 on MIRU: 「全体が重い・カクついてチェックしづらい」): the page composites the edit live
 from proxies. A 35-minute talk has ~900 cuts, so the camera, the screen recording and the circle wipe each seek
 every ~2 s; over the network every seek is a new range request, and five 720p decoders run at once.
 

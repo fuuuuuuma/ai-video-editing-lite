@@ -292,7 +292,15 @@ def curve(item, field, frame, default):
     return float(keys[-1][1])
 
 
+def without_parked(plan):
+    """Captions parked under a screen recording (layers[].parked, 2026-10-21) wait there in case the reviewer moves the
+    screen recording on the page; they are never drawn or checked."""
+    layers = plan.get('layers', [])
+    return plan if not any(L.get('parked') for L in layers) else {**plan, 'layers': [L for L in layers if not L.get('parked')]}
+
+
 def validate(plan):
+    plan = without_parked(plan)
     if plan.get('version') != 1:
         raise ValueError('version must be 1')
     fps = Fraction(str(plan['fps']))
@@ -845,7 +853,7 @@ def main():
     parser.add_argument('--coverage', type=Path,
         help='editing-coverage.json to resolve every editorial event before rendering')
     args = parser.parse_args()
-    plan = json.loads(args.plan.read_text(encoding='utf-8'))
+    plan = without_parked(json.loads(args.plan.read_text(encoding='utf-8')))
     font_relocations = resolve_plan_fonts(plan)
     if args.jobs < 1 or args.jobs > 8:
         parser.error('--jobs must be between 1 and 8')

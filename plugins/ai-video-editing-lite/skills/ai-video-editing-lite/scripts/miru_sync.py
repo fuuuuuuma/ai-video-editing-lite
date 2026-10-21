@@ -307,6 +307,13 @@ def small_video(case, src):
     src = Path(src)
     if src.stat().st_size <= BIG:
         return src
+    try:            # already 720p or smaller (the light "flat" preview is 960x540): send it as it is, never scale it up
+        hgt = int(subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=height', '-of', 'csv=p=0', str(src)],
+                                 capture_output=True, text=True, check=True).stdout.strip().splitlines()[0])
+        if hgt <= 720:
+            return src
+    except (subprocess.CalledProcessError, ValueError, IndexError, OSError):
+        pass
     h = hashlib.sha256(f'{src}|{src.stat().st_size}|{src.stat().st_mtime_ns}|720|{SMALL_CRF}'.encode()).hexdigest()[:20]
     out = case / '.akari/cache/miru-720' / f'{h}.mp4'
     if not out.exists():
