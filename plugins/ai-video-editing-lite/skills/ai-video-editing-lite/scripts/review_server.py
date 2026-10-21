@@ -65,6 +65,7 @@ class Review:
         self.mix_dir = self.case / '.akari/cache/preview-audio'
         self.pcm = review_edits.Pcm(self.case / '.akari/cache/preview-pcm')
         self.lock = threading.Lock()
+        self.mixing = {}         # path of a quick mix being written → Event set when it is there
 
     def set_preview(self, preview):
         base = self.case / '.akari/preview'
@@ -169,14 +170,27 @@ class Review:
         key = hashlib.sha256(json.dumps(keep, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:20]
         self.mix_dir.mkdir(parents=True, exist_ok=True)
         out = self.mix_dir / f'q-{key}.wav'
-        if not out.exists():
-            review_edits.quick_mix(plan, out, self.pcm)
-        os.utime(out)
-        old = sorted(self.mix_dir.glob('q-*.wav'), key=lambda p: p.stat().st_mtime, reverse=True)[KEEP_MIXES:]
-        for p in old:          # only this server's own quick mixes are pruned
-            if p != out:
-                p.unlink(missing_ok=True)
         path = str(out)
+        # the whole programme's mix takes seconds (34 min ≈ 8 s): the page gets the new timeline at once and the sound
+        # file is written behind; a request for it waits until it is there (2026-10-21)
+        if out.exists():
+            os.utime(out)
+        elif path not in self.mixing:
+            done = self.mixing[path] = threading.Event()
+
+            def run():
+                try:
+                    review_edits.quick_mix(plan, out, self.pcm)
+                    old = sorted(self.mix_dir.glob('q-*.wav'), key=lambda p: p.stat().st_mtime, reverse=True)[KEEP_MIXES:]
+                    for p in old:          # only this server's own quick mixes are pruned
+                        if p != out and str(p) not in self.mixing:
+                            p.unlink(missing_ok=True)
+                except Exception as e:     # noqa: BLE001 — the page shows no sound; the log says why
+                    print(f'quick mix failed: {e}', file=sys.stderr, flush=True)
+                finally:
+                    done.set()
+                    self.mixing.pop(path, None)
+            threading.Thread(target=run, daemon=True).start()
         for k, v in self.extra.items():
             if v == path:
                 return k
@@ -365,6 +379,11 @@ def make_handler(review):
             if m and m.group(1) in review.files:
                 return self.send_file(Path(review.files[m.group(1)]), head)
             if m and m.group(1) in review.extra:
+                wait = review.mixing.get(review.extra[m.group(1)])
+                if wait:
+                    wait.wait(120)
+                if not Path(review.extra[m.group(1)]).exists():
+                    return self.send_json({'error': 'the sound for this timeline could not be made (see the server log)'}, 404)
                 return self.send_file(Path(review.extra[m.group(1)]), head)
             self.send_json({'error': 'not found'}, 404)
 

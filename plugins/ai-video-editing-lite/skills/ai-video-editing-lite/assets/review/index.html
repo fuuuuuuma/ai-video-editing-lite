@@ -251,11 +251,20 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
 #range{font:12px/1.2 var(--mono); color:var(--text2); padding:6px 9px; border-radius:9px; background:var(--fill2); transition:background-color .25s, color .25s; font-variant-numeric:tabular-nums}
 #range.set{background:var(--accent-soft); color:var(--accent)}
 
-.tabs{position:relative; display:grid; grid-template-columns:1fr 1fr 1fr; padding:3px; background:var(--fill); border-radius:12px; flex:none}
-.tabs .ind{position:absolute; top:3px; bottom:3px; left:3px; width:calc((100% - 6px) / 3); border-radius:9px; background:#fff;
-  box-shadow:0 3px 8px -2px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.04); transition:transform .4s var(--ease)}
-.tabs[data-tab="notes"] .ind{transform:translateX(100%)}
-.tabs[data-tab="edits"] .ind{transform:translateX(200%)}
+.tabs{position:relative; display:grid; grid-template-columns:1fr 1fr 1fr 42px; padding:3px; background:var(--fill); border-radius:12px; flex:none}
+.tabs .ind{position:absolute; top:3px; bottom:3px; left:0; width:0; border-radius:9px; background:#fff;
+  box-shadow:0 3px 8px -2px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.04); transition:transform .4s var(--ease), width .4s var(--ease)}
+#tabs [data-tab="keys"]{display:grid; place-items:center}
+#tabs [data-tab="keys"] svg{width:18px; height:18px}
+#keyList{display:flex; flex-direction:column; gap:2px}
+.krow{display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px; padding:6px 8px; border-radius:10px; font-size:12.5px}
+.krow:hover{background:var(--fill)}
+.krow .kk{display:flex; gap:4px; align-items:center}
+.krow button.kb{min-width:44px; height:26px; padding:0 8px; border-radius:7px; border:1px solid rgba(60,60,67,.18); background:#fff; font:600 12px var(--mono); cursor:pointer}
+.krow button.kb.wait{border-color:var(--accent); color:var(--accent); animation:pulse 1s ease-in-out infinite}
+.krow button.kb.changed{background:rgba(0,122,255,.08)}
+.krow .rs{font-size:11px; color:var(--text3); border:0; background:none; cursor:pointer}
+#keyHead{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text2); padding:2px 4px 8px}
 .tabs button{position:relative; z-index:1; height:32px; border:0; background:transparent; font-size:13px; font-weight:600; cursor:pointer; border-radius:9px; color:var(--text2);
   transition:color .25s, transform .18s var(--ease)}
 .tabs button.on{color:var(--text)}
@@ -486,40 +495,16 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
 
 <div id="help" class="glass" role="dialog" aria-label="キー操作">
   <h3>キー操作</h3>
+  <p class="small" style="margin:0 0 8px;color:var(--text2)">キーは右の欄の「キー」で自分用に変えられます</p>
   <dl>
-    <dt><kbd>Space</kbd></dt><dd>再生 / 停止</dd>
-    <dt><kbd>K</kbd></dt><dd>停止</dd>
-    <dt><kbd>Z</kbd></dt><dd>再生に戻る</dd>
-    <dt><kbd>C</kbd></dt><dd>再生速度 1 → 1.5 → 2 倍（止めると 1 倍に戻る）</dd>
-    <dt><kbd>V</kbd></dt><dd>軽い再生（映像を1本の軽い動画で流す）の入り切り</dd>
-    <dt><kbd>H</kbd></dt><dd>タイムライン以外を全部しまう／戻す（右下のボタンで1つずつ選べる）</dd>
-    <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>1コマ戻る / 進む</dd>
-    <dt><kbd>⇧</kbd>+<kbd>←</kbd> <kbd>→</kbd></dt><dd>1秒戻る / 進む</dd>
-    <dt><kbd>J</kbd> <kbd>L</kbd></dt><dd>5秒戻る / 進む</dd>
-    <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>前 / 次の編集点（カット点と字幕の切れ目。止めて移動）</dd>
-    <dt><kbd>⇧</kbd>+<kbd>↑</kbd> <kbd>↓</kbd></dt><dd>前 / 次のカット点</dd>
-    <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>前 / 次の演出</dd>
-    <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>前 / 次の修正指示</dd>
-    <dt><kbd>A</kbd></dt><dd>前の編集点 〜 再生位置をカット</dd>
-    <dt><kbd>D</kbd></dt><dd>再生位置 〜 次の編集点をカット</dd>
-    <dt><kbd>I</kbd> <kbd>O</kbd></dt><dd>範囲の始め / 終わり</dd>
-    <dt><kbd>⌫</kbd></dt><dd>選んだ範囲（I / O）をカット</dd>
     <dt><kbd>⌘</kbd>+<kbd>Z</kbd></dt><dd>元に戻す（⌘⇧Z でやり直す）</dd>
-    <dt><kbd>Q</kbd></dt><dd>字幕を外す（選んだ字幕、無ければ再生位置の字幕）。前の字幕が次まで伸びる</dd>
     <dt><kbd>S</kbd></dt><dd>再生位置で字幕を2つに分ける（字幕一覧で分け目にカーソルを置いて Enter）</dd>
     <dt><kbd>E</kbd>・ダブルクリック</dt><dd>字幕をその場で打ち直す（字幕一覧の行・時間軸の字幕）</dd>
-    <dt><kbd>⇧</kbd>+<kbd>A</kbd></dt><dd>字幕を足す（範囲があればその範囲）</dd>
     <dt><kbd>Enter</kbd>・<kbd>⌘</kbd>+<kbd>Enter</kbd></dt><dd>打ち直しを確定（<kbd>⇧</kbd>+<kbd>Enter</kbd> で改行）</dd>
-    <dt><kbd>⇧</kbd>+<kbd>I</kbd></dt><dd>いまの字幕をここから出す</dd>
-    <dt><kbd>⇧</kbd>+<kbd>O</kbd></dt><dd>次の字幕をここから出す</dd>
     <dt>字幕の端をドラッグ</dt><dd>字幕の出入りを動かす（時間軸の「字幕」の段）</dd>
     <dt><kbd>⇧</kbd>+クリック</dt><dd>時間軸の字幕を選ぶ・外す（何も無い所からドラッグで囲んでも選べる）</dd>
     <dt>演出の段で強調・大型QR</dt><dd>クリックで選ぶ・端をドラッグで出入り（⇧I / ⇧O も選んだものに効く）</dd>
-    <dt><kbd>X</kbd></dt><dd>修正指示を書く（止めて欄へ）</dd>
     <dt><kbd>⌘</kbd>+<kbd>Enter</kbd></dt><dd>指示を追加して、再生に戻る</dd>
-    <dt><kbd>⇧</kbd>+<kbd>C</kbd></dt><dd>いまのタイムコードをコピー</dd>
-    <dt><kbd>−</kbd> <kbd>＋</kbd></dt><dd>時間軸を縮小 / 拡大（⌘+ホイールでも）</dd>
-    <dt><kbd>Esc</kbd></dt><dd>入力をやめる・選択を外す・閉じる</dd>
   </dl>
   <div class="path" id="path"></div>
 </div>
@@ -620,6 +605,7 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
       <button data-tab="caps" class="on" role="tab">字幕一覧</button>
       <button data-tab="notes" role="tab">修正指示<span class="count" id="tabCount">0</span></button>
       <button data-tab="edits" role="tab">手直し<span class="count" id="editCount">0</span></button>
+      <button data-tab="keys" role="tab" title="キー操作を自分用に変える" aria-label="キー操作"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button>
     </div>
 
     <div class="panes">
@@ -635,6 +621,10 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
       </div>
       <div class="pane" id="paneEdits" hidden>
         <div class="scroller" id="editScroll"><div id="edits"></div></div>
+      </div>
+      <div class="pane" id="paneKeys" hidden>
+        <div id="keyHead"><span class="grow">右のキーを押してから、新しいキーを押すと変わる（Esc でやめる）</span><button class="btn sm" id="keyReset">全部元に戻す</button></div>
+        <div class="scroller"><div id="keyList"></div></div>
       </div>
     </div>
 
@@ -704,16 +694,22 @@ function anim(el, frames, opts){ if(RM.matches || !el.animate) return null; retu
 // wipes, frames, headers…). Captions, the large QR and a past video's thumbnail stay live on top. Each clip of the
 // current timeline is mapped back to the flat video by source time; a clip it does not hold (a restored cut) is
 // drawn live from the proxies as before.
-let flatEl=null, flatOn=false;
+let flatEl=null, flatOn=false, liveSpans=[];
+const liveAt=f=>liveSpans.some(([a,b])=>a<=f && f<b);
+const liveSoon=f=>{ for(const [a] of liveSpans) if(a>f && a-f<=45) return a; return null; };
 const isLive=L=>L.role==='caption' || L.role==='header' || L.role==='small_qr' || /^(qr-q|qrbg-|thumb)/.test(String(L.id||''));
 function setupFlat(){
   const segs=(M.flat&&M.flat.segments)||[]; const by=new Map();
   for(const g of segs){ if(!by.has(g.media)) by.set(g.media,[]); by.get(g.media).push(g); }
   // the same source moment can appear twice (the avan, the end card): take the copy nearest on the timeline, and only
   // within 2 minutes of where the clip now sits (a cut changed on the page moves the timeline by its length)
-  const moved=(M.retimed||[]).filter(r=>r.kind==='screen'||r.kind==='emphasis').map(r=>[Math.min(r.from[0],r.to[0]),Math.max(r.from[1],r.to[1])]);
+  // a moved screen recording / emphasis: only the frames whose picture changed (between the old and the new edge) are
+  // drawn live; the rest of it is still right in the flat video (2026-10-21: the whole span went live and was slow)
+  liveSpans=[];
+  for(const r of (M.retimed||[])) if(r.kind==='screen'||r.kind==='emphasis') for(const k of [0,1]){
+    const a=Math.min(r.from[k],r.to[k]), b=Math.max(r.from[k],r.to[k]); if(b>a) liveSpans.push([a-1,b+1]); }
+  liveSpans.sort((x,y)=>x[0]-y[0]);
   for(const c of clips){ c.flatT=null; const d=(c.end-c.start)/FPS; let best=1e9;
-    if(moved.some(([x,y])=>c.start<y && x<c.end)) continue;      // drawn live: the flat video holds it where it was
     for(const g of by.get(c.media)||[]){ const gd=(g.end-g.start)/FPS;
       if(c.src>=g.src-0.5/FPS && c.src+d<=g.src+gd+0.5/FPS){ const at=g.start+(c.src-g.src)*FPS, dist=Math.abs(at-c.start);
         if(dist<best && dist<=120*FPS){ best=dist; c.flatT=at/FPS; } } } }
@@ -776,17 +772,19 @@ function render(force){
   const f=frameNow(); const playing=!audio.paused && !(audio.readyState<3);
   // base clips: current + next ones within 1.5 s are kept ready
   const ci=Math.max(0,bsearch(clips,f)); const need=new Map();
-  const useFlat=flatOn && flatEl && clips[ci].flatT!=null;
+  const useFlat=flatOn && flatEl && clips[ci].flatT!=null && !liveAt(f), soon=useFlat?liveSoon(f):null;
   if(useFlat) syncFlat(clips[ci],f,playing); else if(flatEl){ flatEl.style.visibility='hidden'; if(!flatEl.paused) flatEl.pause(); }
   if(!useFlat) need.set(clips[ci].uid,{it:clips[ci],active:true});
-  for(let k=ci+1;k<Math.min(clips.length,ci+3);k++) if(clips[k].start-f<=45 && !(flatOn && clips[k].flatT!=null)) need.set(clips[k].uid,{it:clips[k],active:false});
-  for(const it of vlayers){ if(useFlat && !isLive(it.layer)) continue;
+  if(soon!=null){ const k=Math.max(0,bsearch(clips,soon)); need.set(clips[k].uid,{it:clips[k],active:false,at:soon}); }   // the live picture ready before a moved edge
+  for(let k=ci+1;k<Math.min(clips.length,ci+3);k++) if(clips[k].start-f<=45 && !(flatOn && clips[k].flatT!=null && !liveAt(clips[k].start))) need.set(clips[k].uid,{it:clips[k],active:false});
+  for(const it of vlayers){ if(useFlat && soon==null && !isLive(it.layer)) continue;
+    if(useFlat && !isLive(it.layer)){ if(it.start<=soon && soon<it.end) need.set(it.uid,{it,active:false,at:soon}); continue; }
     if(it.start<=f && f<it.end) need.set(it.uid,{it,active:true}); else if(it.start>f && it.start-f<=45) need.set(it.uid,{it,active:false}); }
   for(const uid of [...assigned.keys()]) if(!need.has(uid)) release(uid);
-  for(const {it,active} of need.values()){
+  for(const {it,active,at} of need.values()){
     const s=acquire(it); const el=s.el; el.playbackRate=audio.playbackRate;
-    const exp=it.src+((active?audio.currentTime*FPS:it.start)-it.start)/FPS;
-    if(!it.isBase){ placeVideoLayer(it,s,active?f:it.start); const ring=domLayers.get('ring'+it.uid); if(ring) ring.style.display=active?'block':'none'; }
+    const exp=it.src+((active?audio.currentTime*FPS:(at??it.start))-it.start)/FPS;
+    if(!it.isBase){ placeVideoLayer(it,s,active?f:(at??it.start)); const ring=domLayers.get('ring'+it.uid); if(ring) ring.style.display=active?'block':'none'; }
     if(active){ el.style.visibility='visible';
       if(playing){ if(el.paused) el.play().catch(()=>{}); if(!el.seeking && Math.abs(el.currentTime-exp)>0.15) el.currentTime=exp; }
       else { if(!el.paused) el.pause(); const e2=it.src+(f+0.5-it.start)/FPS; if(!el.seeking && Math.abs(el.currentTime-e2)>0.4/FPS) el.currentTime=e2; } }
@@ -1168,11 +1166,104 @@ function setupPlaceBox(){
   box.addEventListener('pointerup',end); box.addEventListener('pointercancel',end);
 }
 
+// ---------------------------------------------------------------- keys: one table of actions, each reviewer can change them (キー tab, 2026-10-21)
+// a key is the physical key (KeyboardEvent.code) with Shift / Alt, e.g. "Shift+KeyA"; the defaults also take a few typed
+// characters ("key:[" …) so Japanese keyboards work as before
+const ONE=()=>Math.round(FPS);
+const escAction=()=>{ toggleHelp(false); if($('#stylesSheet').classList.contains('open')) closeStyles(); else if(activeEditor) closeEditor(); else if(selCaps.size){ selCaps=new Set(); tlDirty=true; hud('選択を外しました'); } else if(sel){ sel=null; renderSelBar(); tlDirty=true; } else if(rangeIn!=null){ rangeIn=rangeOut=null; updateRange(); tlDirty=true; } };
+const ACTIONS=[
+  {id:'play', label:'再生 / 停止', keys:['Space'], run:()=>togglePlay()},
+  {id:'stop', label:'停止', keys:['KeyK'], run:()=>pause()},
+  {id:'resume', label:'再生に戻る', keys:['KeyZ'], run:()=>{ if(audio.paused) togglePlay(); }},
+  {id:'rate', label:'再生速度 1 → 1.5 → 2 倍', keys:['KeyC'], run:()=>cycleRate()},
+  {id:'flat', label:'軽い再生の入り切り', keys:['KeyV'], run:()=>toggleFlat()},
+  {id:'fold', label:'タイムライン以外をしまう／戻す', keys:['KeyH'], run:()=>toggleFoldAll()},
+  {id:'f-1', label:'1コマ戻る', keys:['ArrowLeft'], run:()=>step(-1)},
+  {id:'f+1', label:'1コマ進む', keys:['ArrowRight'], run:()=>step(1)},
+  {id:'s-1', label:'1秒戻る', keys:['Shift+ArrowLeft'], run:()=>step(-ONE())},
+  {id:'s+1', label:'1秒進む', keys:['Shift+ArrowRight'], run:()=>step(ONE())},
+  {id:'s-5', label:'5秒戻る', keys:['KeyJ'], run:()=>step(-5*ONE())},
+  {id:'s+5', label:'5秒進む', keys:['KeyL'], run:()=>step(5*ONE())},
+  {id:'edit-1', label:'前の編集点', keys:['ArrowUp'], run:()=>jumpEdit(-1)},
+  {id:'edit+1', label:'次の編集点', keys:['ArrowDown'], run:()=>jumpEdit(1)},
+  {id:'cut-1', label:'前のカット点', keys:['Shift+ArrowUp'], run:()=>jumpCut(-1)},
+  {id:'cut+1', label:'次のカット点', keys:['Shift+ArrowDown'], run:()=>jumpCut(1)},
+  {id:'mark-1', label:'前の演出', keys:['key:[','key:「'], run:()=>jumpMark(-1)},
+  {id:'mark+1', label:'次の演出', keys:['key:]','key:」'], run:()=>jumpMark(1)},
+  {id:'note-1', label:'前の修正指示', keys:['key:,','key:、'], run:()=>jumpComment(-1)},
+  {id:'note+1', label:'次の修正指示', keys:['key:.','key:。'], run:()=>jumpComment(1)},
+  {id:'trimL', label:'前の編集点 〜 再生位置をカット', keys:['KeyA'], run:()=>trimTo(-1)},
+  {id:'trimR', label:'再生位置 〜 次の編集点をカット', keys:['KeyD'], run:()=>trimTo(1)},
+  {id:'in', label:'範囲の始め', keys:['KeyI'], run:()=>$('#setIn').click()},
+  {id:'out', label:'範囲の終わり', keys:['KeyO'], run:()=>$('#setOut').click()},
+  {id:'cutRange', label:'選んだ範囲（I / O）をカット', keys:['Backspace','Delete'], run:()=>cutRange()},
+  {id:'capOff', label:'字幕を外す', keys:['KeyQ'], run:()=>removeCaps()},
+  {id:'split', label:'再生位置で字幕を分ける', keys:['KeyS'], run:()=>openSplit()},
+  {id:'retype', label:'字幕をその場で打ち直す', keys:['KeyE'], run:()=>openCapFix()},
+  {id:'capAdd', label:'字幕を足す', keys:['Shift+KeyA'], run:()=>openAdd()},
+  {id:'capFrom', label:'いまの字幕をここから出す', keys:['Shift+KeyI'], run:()=>(sel?selFromHere:capFromHere)()},
+  {id:'capNext', label:'次の字幕をここから出す', keys:['Shift+KeyO'], run:()=>(sel?selToHere:nextFromHere)()},
+  {id:'note', label:'修正指示を書く', keys:['KeyX'], run:()=>{ audio.pause(); $('#note').focus(); }},
+  {id:'copyTc', label:'いまのタイムコードをコピー', keys:['Shift+KeyC'], run:()=>copyTc()},
+  {id:'zoomOut', label:'時間軸を縮小', keys:['Minus','key:-','key:ー'], run:()=>zoomBy(-1)},
+  {id:'zoomIn', label:'時間軸を拡大', keys:['Equal','Semicolon','key:+','key:^','key:＋','key:='], run:()=>zoomBy(1)},
+  {id:'help', label:'キー操作の一覧', keys:['key:?','key:？'], run:()=>toggleHelp()},
+  {id:'esc', label:'やめる・選択を外す・閉じる', keys:['Escape'], run:()=>escAction()},
+];
+let keyMap={}; try{ keyMap=JSON.parse(localStorage.getItem('review-keys')||'{}')||{}; }catch{}
+const keysOf=a=>keyMap[a.id]||a.keys;
+const comboOf=e=>(e.altKey?'Alt+':'')+(e.shiftKey?'Shift+':'')+e.code;
+function actionOf(e){ const c=comboOf(e);
+  for(const a of ACTIONS) for(const k of keysOf(a)){ if(k===c) return a; }
+  for(const a of ACTIONS) for(const k of keysOf(a)){ if(k.startsWith('key:') && !e.altKey && k.slice(4)===e.key) return a; }
+  return null; }
+const KEY_NAME={Space:'Space', ArrowLeft:'←', ArrowRight:'→', ArrowUp:'↑', ArrowDown:'↓', Backspace:'⌫', Delete:'Del', Escape:'Esc', Minus:'−', Equal:'＝', Semicolon:';', Enter:'Enter', Tab:'Tab', Comma:',', Period:'.', Slash:'/'};
+function keyLabel(k){ if(k.startsWith('key:')) return k.slice(4);
+  return k.split('+').map(x=>x==='Shift'?'⇧':x==='Alt'?'⌥':KEY_NAME[x]||x.replace(/^Key/,'').replace(/^Digit/,'').replace(/^Numpad/,'テンキー')).join('+'); }
+let keyWait=null;
+function saveKeys(){ try{ localStorage.setItem('review-keys', JSON.stringify(keyMap)); }catch{} renderKeys(); renderHelpKeys(); }
+function catchKey(e){ e.preventDefault(); e.stopPropagation();
+  if(e.code==='Escape' && !e.shiftKey && !e.altKey){ keyWait=null; renderKeys(); hud('変更をやめました'); return; }
+  if(['ShiftLeft','ShiftRight','AltLeft','AltRight','MetaLeft','MetaRight','ControlLeft','ControlRight'].includes(e.code)) return;
+  if(e.metaKey||e.ctrlKey){ hud('⌘ / Ctrl の組み合わせは使えません（⌘Z は元に戻す）'); return; }
+  const c=comboOf(e), a=ACTIONS.find(x=>x.id===keyWait); keyWait=null;
+  for(const o of ACTIONS){ if(o===a) continue; const ks=keysOf(o); if(ks.includes(c)){ keyMap[o.id]=ks.filter(k=>k!==c); hud(`「${o.label}」から ${keyLabel(c)} を外しました`); } }
+  keyMap[a.id]=[c]; saveKeys(); toast(`「${a.label}」を ${keyLabel(c)} にしました`); }
+function renderKeys(){ const box=$('#keyList'); if(!box) return; box.innerHTML='';
+  for(const a of ACTIONS){ const ks=keysOf(a), changed=!!keyMap[a.id];
+    const row=document.createElement('div'); row.className='krow';
+    row.innerHTML=`<span>${esc(a.label)}</span><span class="kk"><button class="kb${keyWait===a.id?' wait':''}${changed?' changed':''}" title="押してから新しいキーを押す">${keyWait===a.id?'キーを押す…':(ks.length?ks.map(k=>esc(keyLabel(k))).join(' / '):'なし')}</button>${changed?'<button class="rs" title="元のキーに戻す">元に戻す</button>':''}</span>`;
+    row.querySelector('.kb').onclick=ev=>{ ev.stopPropagation(); keyWait=keyWait===a.id?null:a.id; renderKeys(); };
+    const rs=row.querySelector('.rs'); if(rs) rs.onclick=ev=>{ ev.stopPropagation(); delete keyMap[a.id]; saveKeys(); };
+    box.appendChild(row); } }
+// the help sheet lists the keys as they are now
+function renderHelpKeys(){ const dl=document.querySelector('#help dl'); if(!dl) return;
+  dl.querySelectorAll('[data-k]').forEach(x=>x.remove());
+  const first=dl.firstChild;
+  for(const a of ACTIONS){ const dt=document.createElement('dt'); dt.dataset.k=a.id; dt.innerHTML=keysOf(a).filter(k=>!k.startsWith('key:')||!keysOf(a).some(x=>!x.startsWith('key:'))).slice(0,2).map(k=>`<kbd>${esc(keyLabel(k))}</kbd>`).join(' ')||'—';
+    const dd=document.createElement('dd'); dd.dataset.k=a.id; dd.textContent=a.label; dl.insertBefore(dt,first); dl.insertBefore(dd,first); } }
+
 // ---------------------------------------------------------------- undo / redo of everything done on this page
 const hist={undo:[], redo:[]}, snap={}; let restoring=false;
 const HIST_LABEL={comments:'修正指示', edits:'字幕の手直し', cuts:'カット・出入りの手直し'};
 function snapshot(kind){ return JSON.stringify(kind==='comments'?comments.items:kind==='edits'?edits.items.map(({_r,...x})=>x):cuts.items); }
 function remember(kind){ snap[kind]=snapshot(kind); }
+// ⌘Z on cuts is instant (2026-10-21): every timeline the page has shown is kept by the cut state that made it; going back
+// to one shows it at once and saves the cut list in the background (the server answers the same timeline)
+const MAN_KEYS=['frames','clips','layers','camera','marks','audio','cut_rev','follow_rev','cut_warnings','cut_error','cut_check','retimed','caption_style'];
+const timelines=new Map();
+function keepTimeline(m){ m=m||M; const k=snapshot('cuts'); const o={}; for(const x of MAN_KEYS) o[x]=m[x];
+  // the page moves captions in place (time edits): keep each layer as the timeline gave it
+  o.layers=(m.layers||[]).map(L=>{ const {_s,_e,...r}=L; if(_s!==undefined){ r.start=_s; r.end=_e; } return r; });
+  timelines.delete(k); timelines.set(k, JSON.stringify(o)); while(timelines.size>40) timelines.delete(timelines.keys().next().value); }
+async function restoreCutsFast(items, label){
+  const k=JSON.stringify(items), t=timelines.get(k); if(!t) return false;
+  audio.pause(); cuts.items=items; await applyManifest(JSON.parse(t), {keep:true}); renderCutCard(); renderEdits(); toast(label);
+  fetch('/api/cut-edits',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items})})
+    .then(async r=>{ const d=await r.json(); if(!r.ok) throw new Error(d.error||r.status); cuts={schema:d.schema, items:d.items, saved_at:d.saved_at}; snap.cuts=snapshot('cuts');
+      if(d.manifest && (d.manifest.cut_rev||'')!==(M.cut_rev||'')) { await applyManifest(d.manifest,{keep:true}); } keepTimeline(); })
+    .catch(e=>toast('保存できませんでした：'+e.message));
+  return true; }
 function record(kind){ const now=snapshot(kind);
   if(!restoring && snap[kind]!=null && now!==snap[kind]){ hist.undo.push({kind, before:snap[kind], after:now}); if(hist.undo.length>200) hist.undo.shift(); hist.redo.length=0; }
   snap[kind]=now; updateHist(); }
@@ -1184,7 +1275,7 @@ async function restoreState(kind, state, label){
   try{ const items=JSON.parse(state);
     if(kind==='comments'){ comments.items=items; save(); renderList(); }
     else if(kind==='edits'){ edits.items=items; saveEdits(); rebuildCaps(); }
-    else await sendCuts(items, {keep:true}, label);
+    else if(!(await restoreCutsFast(items, label))) await sendCuts(items, {keep:true}, label);
   } finally { restoring=false; snap[kind]=snapshot(kind); updateHist(); }
   if(kind!=='cuts') toast(label); }
 async function undo(){ if(busy){ toast('反映中です。少し待ってください'); return; } const h=hist.undo.pop(); if(!h){ hud('戻せる操作はありません'); return; }
@@ -1616,7 +1707,7 @@ async function sendCuts(items, opt, label){
     const r=await fetch('/api/cut-edits',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items})});
     const d=await r.json(); if(!r.ok) throw new Error(d.error||r.status);
     cuts={schema:d.schema, items:d.items, saved_at:d.saved_at}; record('cuts');
-    await applyManifest(d.manifest, opt);
+    keepTimeline(d.manifest); await applyManifest(d.manifest, opt);
     const w=(d.manifest.cut_warnings||[]), ck=d.manifest.cut_check;
     toast((label?label+'：':'')+(w.length?'一部は反映できませんでした':`反映しました（${((performance.now()-t0)/1000).toFixed(1)}秒）`)+(ck&&!ck.ok?'・ずれ検査 要確認':''));
   }catch(e){ toast('反映できませんでした：'+e.message); }
@@ -1664,7 +1755,7 @@ async function applyManifest(m, opt){
   for(const [k,el] of domLayers){ el.remove(); } domLayers.clear();
   loadTimeline();
   await new Promise(res=>{ const url=mediaUrl(M.audio); if(audio.src.endsWith(url)){ res(); return; }
-    audio.addEventListener('loadedmetadata',res,{once:true}); audio.src=url; audio.load(); setTimeout(res,8000); });
+    audio.addEventListener('loadedmetadata',res,{once:true}); audio.src=url; audio.load(); setTimeout(res,250); });   // the server may still be writing the sound: the timeline does not wait for it
   rebuildCaps(); renderList(); lastCardKey=''; tlDirty=true; renderSelBar();
   focusJ=opt.listen!=null && cutFrames.includes(opt.listen)?opt.listen:null;
   let target=opt.listen!=null?opt.listen:frameFromSource(keepSrc,keepF);
@@ -1861,14 +1952,20 @@ function fitLayout(){
   document.documentElement.style.setProperty('--stage-max-h',Math.max(180,avail)+'px'); }
 function fitStage(){ const w=$('#stageWrap').clientWidth, h=$('#stageWrap').clientHeight; const s=Math.min(w/M.width,h/M.height); stageScale=s;
   $('#stage').style.transform=`translate(${(w-M.width*s)/2}px,${(h-M.height*s)/2}px) scale(${s})`; }
+// the white pill under the chosen tab (the tabs are not all the same width)
+function placeTabInd(){ const b=document.querySelector(`#tabs button[data-tab="${curTab}"]`), ind=document.querySelector('#tabs .ind'); if(!b||!ind||!b.offsetWidth) return;
+  ind.style.width=b.offsetWidth+'px'; ind.style.transform=`translateX(${b.offsetLeft}px)`; }
+try{ new ResizeObserver(()=>placeTabInd()).observe(document.querySelector('#tabs')); }catch{ addEventListener('resize',()=>placeTabInd()); }
 function setTab(t, animate){
   curTab=t; $('#tabs').dataset.tab=t; document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
-  const panes={caps:$('#paneCaps'), notes:$('#paneNotes'), edits:$('#paneEdits')}, order=['caps','notes','edits'];
+  placeTabInd();
+  const panes={caps:$('#paneCaps'), notes:$('#paneNotes'), edits:$('#paneEdits'), keys:$('#paneKeys')}, order=['caps','notes','edits','keys'];
   const prev=setTab._prev??0, idx=order.indexOf(t); setTab._prev=idx;
   for(const [k,el] of Object.entries(panes)) el.hidden=k!==t; const show=panes[t];
   if(animate) anim(show,[{opacity:0,transform:`translateX(${idx<prev?-14:14}px)`},{opacity:1,transform:'none'}],{duration:380});
   try{ localStorage.setItem('review.tab',t); }catch{}
   if(t==="caps"){ userScrollAt=0; lastAnchor=-1; updateTranscript(frameNow()); }
+  if(t==="keys") renderKeys();
 }
 function toggleHelp(force){ const h=$('#help'); const open=force??!h.classList.contains('open'); h.classList.toggle('open',open); }
 function hideSkeleton(){ ready=true; document.body.classList.add('ready'); const sk=$('#skeleton'); sk.classList.add('out'); setTimeout(()=>sk.remove(),800); }
@@ -1904,7 +2001,7 @@ async function init(){
   catch{ cutsOK=false; cuts={items:[]}; }
   try{ const r=await fetch('/api/carried'); carried=r.ok?await r.json():{items:[]}; carried.items=carried.items||[]; }catch{ carried={items:[]}; }
   if(M.cut_error){ cutsOK=false; toast('カットの手直しを当てられませんでした：'+M.cut_error); }
-  remember('comments'); remember('edits'); remember('cuts');
+  remember('comments'); remember('edits'); remember('cuts'); keepTimeline();
   // a back swipe (Safari) or the back button asks first instead of leaving the page mid-edit
   history.pushState({stay:1},'',location.href);
   addEventListener('popstate',()=>{ if(confirm('この画面を離れますか？（手直しは保存されています）')) history.back(); else history.pushState({stay:1},'',location.href); });
@@ -1952,60 +2049,31 @@ async function init(){
 
   document.addEventListener('keydown',e=>{
     if(e.isComposing || e.keyCode===229) return;      // the IME is converting: the keys are its own
+    if(keyWait){ catchKey(e); return; }               // the キー tab is waiting for a new key
     const t=e.target, tag=t.tagName;
     if(tag==='TEXTAREA'||tag==='INPUT'||tag==='SELECT'||t.isContentEditable){ if(e.key==='Escape') t.blur(); return; }
     if((e.metaKey||e.ctrlKey) && e.code==='KeyZ' && ready){ e.preventDefault(); if(e.shiftKey) redo(); else undo(); return; }
     if((e.metaKey||e.ctrlKey) && e.code==='KeyY' && ready){ e.preventDefault(); redo(); return; }
-    if(e.metaKey||e.ctrlKey||e.altKey||!ready) return;
-    const k=e.key, c=e.code, one=Math.round(FPS); let ok=true;
-    if(k===' '||c==='Space') togglePlay();
-    else if(c==='KeyK') pause();
-    else if(k==='ArrowLeft') step(e.shiftKey?-one:-1);
-    else if(k==='ArrowRight') step(e.shiftKey?one:1);
-    else if(k==='ArrowUp') e.shiftKey?jumpCut(-1):jumpEdit(-1);
-    else if(k==='ArrowDown') e.shiftKey?jumpCut(1):jumpEdit(1);
-    else if(c==='KeyJ') step(-5*one); else if(c==='KeyL') step(5*one);
-    else if(c==='KeyQ') removeCaps();
-    else if(c==='KeyS') openSplit();
-    else if(c==='KeyD') trimTo(1);
-    else if(c==='KeyA' && e.shiftKey) openAdd();
-    else if(c==='KeyA') trimTo(-1);
-    else if(c==='KeyV') toggleFlat();
-    else if(c==='KeyH') toggleFoldAll();
-    else if(c==='KeyC' && e.shiftKey) copyTc();
-    else if(c==='KeyC') cycleRate();
-    else if(c==='KeyX'){ audio.pause(); $('#note').focus(); }
-    else if(c==='KeyZ'){ if(audio.paused) togglePlay(); }
-    else if(c==='KeyI' && e.shiftKey) (sel?selFromHere:capFromHere)();
-    else if(c==='KeyO' && e.shiftKey) (sel?selToHere:nextFromHere)();
-    else if(k==='Backspace'||k==='Delete') cutRange();
-    else if(k==='-'||k==='ー'||c==='Minus') zoomBy(-1);
-    else if(k==='='||k==='+'||k==='^'||k==='＋'||c==='Equal'||c==='Semicolon') zoomBy(1);
-    else if(c==='KeyE') openCapFix();
-    else if(c==='KeyI') $('#setIn').click(); else if(c==='KeyO') $('#setOut').click();
-    else if(k==='['||k==='「') jumpMark(-1); else if(k===']'||k==='」') jumpMark(1);
-    else if(k===','||k==='、') jumpComment(-1); else if(k==='.'||k==='。') jumpComment(1);
-    else if(k==='?'||k==='？') toggleHelp();
-    else if(k==='Escape' && $('#stylesSheet').classList.contains('open')) closeStyles();
-    else if(k==='Escape'){ toggleHelp(false); if(activeEditor) closeEditor(); else if(selCaps.size){ selCaps=new Set(); tlDirty=true; hud('選択を外しました'); } else if(sel){ sel=null; renderSelBar(); tlDirty=true; } else if(rangeIn!=null){ rangeIn=rangeOut=null; updateRange(); tlDirty=true; } }
-    else ok=false;
-    if(ok) e.preventDefault();
+    if(e.metaKey||e.ctrlKey||!ready) return;
+    const a=actionOf(e); if(!a) return;
+    e.preventDefault(); a.run(e);
   });
   // a focused button must not also be "clicked" by Space
   document.addEventListener('keyup',e=>{ if((e.key===' ')&&e.target.tagName==='BUTTON') e.preventDefault(); });
 
   buildTranscript(); setupCanvasInput();
-  let tab='caps'; try{ tab=localStorage.getItem('review.tab')||'caps'; }catch{} setTab(['notes','edits'].includes(tab)?tab:'caps',false);
+  let tab='caps'; try{ tab=localStorage.getItem('review.tab')||'caps'; }catch{} setTab(['notes','edits','keys'].includes(tab)?tab:'caps',false);
   new ResizeObserver(()=>{ fitStage(); tlDirty=true; render(true); }).observe($('#stageWrap')); fitStage();
   { const ro=new ResizeObserver(()=>fitLayout()); for(const el of $('#left').children) if(el.id!=='stageWrap') ro.observe(el);
     addEventListener('resize',fitLayout); fitLayout(); setupFolds(); }
+  renderHelpKeys(); $('#keyReset').onclick=()=>{ keyMap={}; saveKeys(); toast('キーを全部元に戻しました'); };
   new ResizeObserver(()=>{ tlDirty=true; }).observe($('#timeline'));
   // refresh notes written by the agent (status/reply) without reloading
   setInterval(async()=>{ if(document.activeElement && ['TEXTAREA','INPUT'].includes(document.activeElement.tagName)) return;
     try{ const d=await fetch('/api/comments').then(r=>r.json()); if(d.saved_at && d.saved_at!==comments.saved_at && !saveTimer){ comments=d; comments.items=comments.items||[]; remember('comments'); renderList(); } }catch{}
     if(editsOK && !activeEditor && !editsBusy) try{ const d=await fetch('/api/caption-edits').then(r=>r.json()); if(d.saved_at && d.saved_at!==edits.saved_at){ edits=d; edits.items=edits.items||[]; remember('edits'); rebuildCaps(); } }catch{}
     if(cutsOK && !busy) try{ const d=await fetch('/api/cut-edits').then(r=>r.json()); if(d.saved_at && d.saved_at!==cuts.saved_at){ cuts=d; cuts.items=cuts.items||[];
-      remember('cuts'); const m=await fetch('/api/manifest').then(r=>r.json()); if((m.cut_rev||'')!==(M.cut_rev||'')) await applyManifest(m,{}); renderEdits(); } }catch{}
+      remember('cuts'); const m=await fetch('/api/manifest').then(r=>r.json()); if((m.cut_rev||'')!==(M.cut_rev||'')) await applyManifest(m,{}); keepTimeline(); renderEdits(); } }catch{}
     try{ const m=await fetch('/api/previews').then(r=>r.json()); const nv=m.previews.filter(p=>!M.previews.includes(p));
       if(nv.length){ const b=$('#newVer'); b.textContent=`新しいプレビュー ${nv[nv.length-1]} を開く`; b.style.display='inline-flex';
         b.onclick=async()=>{ await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv[nv.length-1]})}); location.reload(); }; } }catch{} }, 5000);
