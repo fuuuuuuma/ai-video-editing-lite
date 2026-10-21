@@ -1,0 +1,41 @@
+{
+ "schema": "ai-video-editing-lite/style-v1",
+ "note": "まだ何も学習していないチャンネルの出発点。学習したら、このファイルと同じ形で channel.json の style を書き換える。font は lite.py の FONT_SET の名前（gothic・dela・mincho・round・brush・reggae・pop・gothic-bold）か、利用者の書体ファイルの場所。",
+ "canvas": {"width": 1920, "height": 1080, "fps": "30/1"},
+ "speakers": {"K": "本人", "S": "相手"},
+ "caption": {
+  "normal": {
+   "K": {"font": "gothic", "font_size": 84, "color": "#ffffff", "proportional_spacing": true, "padding": 4,
+         "shadows": [{"color": "#0b2a4a", "spread": 6, "blur": 1.5, "opacity": 1}, {"color": "#0b2a4a", "spread": 12, "blur": 10, "opacity": 0.8}]},
+   "S": {"font": "gothic", "font_size": 84, "color": "#ffffff", "proportional_spacing": true, "padding": 4,
+         "shadows": [{"color": "#5a5a5a", "spread": 6, "blur": 1.5, "opacity": 1}, {"color": "#5a5a5a", "spread": 12, "blur": 10, "opacity": 0.8}]}
+  },
+  "normal_place": {"one_line_top": 948, "two_line_bottom": 1030, "center_x": 960, "max_width": 1760},
+  "max_chars_per_line": 18,
+  "emphasis_place": {"bottom": 1050, "min_top": 640, "center_x": 960, "max_width": 1760, "max_size": 190, "spacing_ratio": 0.08, "padding": 6}
+ },
+ "zoom": {"emphasis_scale": 1.15, "cx": 0.5, "cy": 0.42},
+ "cut": {
+  "pad_frames": 2,
+  "max_pause_seconds": 0.35,
+  "fillers": ["えー", "えーと", "えっと", "あのー", "あの", "その", "うーん", "んー", "まぁ", "まあ", "なんか"],
+  "fillers_only_with_pause": ["あの", "その", "まあ", "まぁ", "なんか"],
+  "keep_backchannel": ["はい", "うん", "ええ"]
+ },
+ "roles": [
+  {"role": "assertion", "label": "言い切り", "when": "結論・主張をはっきり言い切ったところ", "avoid": "推量（〜かも・〜と思う）、呼びかけ、例の列挙の途中"},
+  {"role": "warning", "label": "注意・警告", "when": "失敗・損・危ないことを伝えるところ", "avoid": "軽い冗談"},
+  {"role": "negation", "label": "強い否定・ツッコミ", "when": "強く打ち消す・ツッコむところ", "avoid": "やわらかい否定"},
+  {"role": "boke", "label": "ボケ・とぼけ", "when": "自虐・とぼけ・言い間違いの笑い", "avoid": "まじめな説明"},
+  {"role": "achievement", "label": "成果・数字・お得", "when": "結果・金額・数字・特典を出すところ", "avoid": "同じ数字の2回目"},
+  {"role": "name", "label": "名前の紹介", "when": "製品・サービス・人の名前が初めて出たところ", "avoid": "2回目以降"}
+ ],
+ "designs": [
+  {"id": "A1", "role": "assertion", "name": "白い明朝・黒縁", "status": "adopt", "style": {"font": "mincho", "color": "#ffffff", "strokes": [{"width": 10, "color": "#111111"}], "shadows": [{"color": "#000000", "spread": 4, "blur": 10, "opacity": 0.6}]}},
+  {"id": "W1", "role": "warning", "name": "赤い明朝・白縁", "status": "adopt", "style": {"font": "mincho", "fill_gradient": {"axis": "vertical", "stops": [{"position": 0.0, "color": "#5c0003"}, {"position": 0.5, "color": "#c0000a"}, {"position": 1.0, "color": "#5c0003"}]}, "strokes": [{"width": 5, "color": "#ffffff"}], "shadows": [{"color": "#1f1f1f", "spread": 6, "blur": 18, "opacity": 1}]}},
+  {"id": "N1", "role": "negation", "name": "赤い筆文字", "status": "adopt", "style": {"font": "brush", "color": "#e00010", "strokes": [{"width": 9, "color": "#ffffff"}], "shadows": [{"color": "#000000", "spread": 4, "blur": 12, "opacity": 0.7}]}},
+  {"id": "B1", "role": "boke", "name": "白の丸文字・青縁", "status": "adopt", "style": {"font": "round", "color": "#ffffff", "strokes": [{"width": 11, "color": "#1f6fd1"}], "shadows": [{"color": "#000000", "spread": 3, "blur": 8, "opacity": 0.5}]}},
+  {"id": "G1", "role": "achievement", "name": "金のゴシック", "status": "adopt", "style": {"font": "dela", "fill_gradient": {"axis": "vertical", "stops": [{"position": 0.0, "color": "#fff3a0"}, {"position": 0.5, "color": "#f5c400"}, {"position": 1.0, "color": "#b07800"}]}, "strokes": [{"width": 9, "color": "#3b2400"}], "shadows": [{"color": "#000000", "spread": 4, "blur": 12, "opacity": 0.7}]}},
+  {"id": "P1", "role": "name", "name": "白の極太・紺縁", "status": "adopt", "style": {"font": "dela", "color": "#ffffff", "strokes": [{"width": 10, "color": "#0b2a4a"}], "shadows": [{"color": "#000000", "spread": 4, "blur": 10, "opacity": 0.6}]}}
+ ]
+}

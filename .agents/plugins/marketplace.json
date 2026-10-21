@@ -1,0 +1,20 @@
+{
+  "name": "ai-video-editing-lite",
+  "interface": {
+    "displayName": "AI動画編集 lite"
+  },
+  "plugins": [
+    {
+      "name": "ai-video-editing-lite",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ai-video-editing-lite"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Creative"
+    }
+  ]
+}

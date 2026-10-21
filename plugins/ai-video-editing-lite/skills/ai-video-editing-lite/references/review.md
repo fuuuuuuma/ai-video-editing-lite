@@ -1,0 +1,48 @@
+# 見てもらう・直す（MIRU と手元の確認画面）
+
+## MIRU（https://miru.pinpon-fuuma.workers.dev）
+
+動画の確認サイト。Google でログインした人は誰でも自分のチャンネルを作れ、招待した人だけが見られる（サイトの運営者にも見えない）。無料で使える容量は 1 人 2GB・チャンネル 3 つ。版が変わっても同じ映像・音は 1 回分しか数えないので、2 版目からは変わった分（数十 MB）だけ増える。古い版は動画のパネルで左にスワイプして消せる。無料の人の古い版は、各動画の新しい 2 つより前で 30 日たつと自動で消える。
+
+**初回の準備（利用者がする）:**
+1. MIRU を開いて Google でログイン。
+2. 「設定 → Claude Code とつなぐ」で鍵を作り、「鍵だけコピー」。
+3. Mac はターミナルで `mkdir -p ~/.config/miru && pbpaste > ~/.config/miru/token`、Windows は PowerShell で `New-Item -Force -ItemType Directory $HOME\.config\miru; Get-Clipboard | Set-Content -NoNewline $HOME\.config\miru\token`。
+
+鍵は 1 年で切れる。切れたら同じ手順で作り直す。
+
+**上げる:**
+```
+PY scripts/build_review_preview.py <案件> --plan <案件>/planning/render-plan-vN.json
+PY scripts/miru_sync.py publish <案件> --preview vN
+```
+- MIRU のチャンネルは、学んだチャンネルの名前で初回に自動で作る（同じ名前が使われていれば後ろに印を付けて作り、記憶に残す）。動画の名前がぶつかったときも同じ（`<案件>/.akari/miru.json`）。
+- 通信が切れても 5 回まで待ってやり直す。止まったら同じコマンドをもう一度実行すると、大きいファイルは続きから上げる。
+- 容量が足りないと「容量が足りません」と止まる。古い版を消してもらうか、利用者に伝える。
+- 出たリンクを利用者に送る。見せる人（編集を頼んだ人など）は、MIRU の「設定 → チャンネルと招待」で利用者が招待する。
+
+**取り込む・返事する:**
+```
+PY scripts/miru_sync.py pull <案件> --preview vN      # 修正指示 → planning/review-comments.json、画面での手直し → planning/*-edits.json
+PY scripts/miru_sync.py reply <案件> --note <id> --text "直しました" --status done
+```
+
+**強調デザインの採用・不採用:** MIRU の「強調デザイン」で決めたものを `miru_sync.py designs-pull` で記憶に取り込む。新しいデザインを足したら `designs-push --case <案件> --plan <plan>` で見本ごと上げる（決めた状態は上書きしない）。
+
+## 手元の確認画面（MIRU を使わないとき）
+
+```
+PY scripts/build_review_preview.py <案件> --plan <plan>
+PY scripts/review_server.py <案件>        # http://localhost:8765/ （この PC からだけ見られる）
+```
+修正指示は `planning/review-comments.json` に入る。`PY scripts/review_comments.py <案件> list` で読み、`reply <id> --text … --done` で返事。
+
+## 直して次の版へ
+
+1. 修正指示を全部読む。言われた所だけでなく、同じ種類の誤りが他に無いか探す（「フィラーが残っている」と言われたら全体を見直す）。
+2. cuts.json / captions.json / emphasis.json を直す。画面での手直し（字幕の打ち直し・出入り・カットの戻しと追加）は、次で計画に当てる:
+   ```
+   PY scripts/review_edits.py <案件> apply --plan planning/render-plan-vN.json --preview vN --out planning/render-plan-vN-r1.json
+   ```
+   cuts / captions を直したときは `build.py plan` で新しい版を作り、前の版の手直しを当て直してから `review_edits.py <案件> carried --plan <新しい plan> --preview <新しい版> --from vN=planning/caption-edits.json,planning/cut-edits.json` で 1 件ずつ照合し、「要確認」が 0 になってから見せる。
+3. 続けてほしい直しは `channel_memory.py rule` で記憶に足す。

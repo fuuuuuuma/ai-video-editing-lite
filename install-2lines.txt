@@ -1,0 +1,5 @@
+claude plugin marketplace add fuuuuuuma/ai-video-editing-lite
+claude plugin install ai-video-editing-lite@ai-video-editing-lite
+
+codex plugin marketplace add fuuuuuuma/ai-video-editing-lite
+codex plugin add ai-video-editing-lite@ai-video-editing-lite

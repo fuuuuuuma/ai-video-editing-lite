@@ -1,0 +1,108 @@
+"""Tests that need no network, no video and no speech model:  PY -m unittest discover -s tests"""
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+SCRIPTS = Path(__file__).resolve().parents[1] / 'scripts'
+sys.path.insert(0, str(SCRIPTS))
+TMP = tempfile.mkdtemp(prefix='aive-lite-test-')
+os.environ['AIVE_LITE_HOME'] = TMP
+
+import lite  # noqa: E402
+import build  # noqa: E402
+import prepare  # noqa: E402
+
+
+def run(*args):
+    r = subprocess.run([sys.executable, *map(str, args)], capture_output=True, text=True, env={**os.environ, 'AIVE_LITE_HOME': TMP})
+    if r.returncode:
+        raise AssertionError(r.stderr)
+    return r.stdout
+
+
+class Memory(unittest.TestCase):
+    def test_add_set_style_keeps_decisions(self):
+        run(SCRIPTS / 'channel_memory.py', 'add', '--name', 'テスト', '--slug', 'mem-a')
+        rows = json.loads(run(SCRIPTS / 'channel_memory.py', 'list'))
+        self.assertTrue(any(r['slug'] == 'mem-a' and r['current'] for r in rows))
+        d = lite.designs_file('mem-a')
+        data = json.loads(d.read_text())
+        data['designs'][0].update(status='reject', decided_at='2026-10-21T00:00:00+0900')       # the reviewer rejected A1
+        d.write_text(json.dumps(data, ensure_ascii=False))
+        style = json.loads((lite.SKILL / 'assets/style-default.json').read_text())
+        style['caption']['max_chars_per_line'] = 14
+        f = Path(TMP) / 'style.json'
+        f.write_text(json.dumps(style, ensure_ascii=False))
+        run(SCRIPTS / 'channel_memory.py', 'set-style', '--file', f, '--slug', 'mem-a')
+        prof = lite.load_channel('mem-a')
+        self.assertEqual(prof['style']['caption']['max_chars_per_line'], 14)
+        self.assertTrue(prof['learned'])
+        self.assertEqual(json.loads(d.read_text())['designs'][0]['status'], 'reject')   # kept
+        run(SCRIPTS / 'channel_memory.py', 'rule', '強調は1分に1個まで', '--slug', 'mem-a')
+        self.assertEqual(lite.load_channel('mem-a')['rules'][0]['text'], '強調は1分に1個まで')
+
+    def test_slug(self):
+        self.assertEqual(lite.slugify('My Channel!'), 'my-channel')
+        self.assertTrue(lite.slugify('日本語だけ').startswith('ch-'))
+
+
+class Words(unittest.TestCase):
+    def test_filler_only_blocks(self):
+        rx = prepare.filler_regex(json.loads((lite.SKILL / 'assets/style-default.json').read_text()))
+        for t in ('えー', 'えーっと'.replace('っ', ''), 'あのー', 'えーあのー', 'うーん'):
+            self.assertTrue(rx.match(prepare.norm(t)), t)
+        for t in ('あのね', 'えーすごい', 'はい'):
+            self.assertFalse(rx.match(prepare.norm(t)), t)
+
+    def test_line_break_not_before_particle(self):
+        lines = build.split_two('ゼロイチ担当してくださいっていうのを受けたことあるんですよ', 18)
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(all(len(x) <= 18 for x in lines))
+        self.assertNotIn(lines[1][0], 'をがはにでとものへや')
+
+
+class Timeline(unittest.TestCase):
+    def make_case(self, removals=()):
+        case = Path(tempfile.mkdtemp(dir=TMP))
+        (case / 'planning').mkdir()
+        (case / '.akari/work').mkdir(parents=True)
+        style = json.loads((lite.SKILL / 'assets/style-default.json').read_text())
+        lite.write_json(case / 'planning/source.json', {'videos': [{'path': '/x.mp4', 'duration': 20.0, 'fps': '30/1', 'has_audio': True}]})
+        lite.write_json(case / 'planning/channel-snapshot.json', {'slug': 't', 'style': style})
+        lite.write_json(case / '.akari/work/voice-0.json', {'runs': [[1.0, 3.0], [3.2, 5.0], [9.0, 12.0]]})
+        lite.write_json(case / '.akari/work/blocks-0.json', [])
+        lite.write_json(case / 'planning/cuts.json', {'removals': list(removals)})
+        return build.Case(case)
+
+    def test_pauses_closed_and_removals_taken_out(self):
+        c = self.make_case()
+        # 1.0-5.0 (the 0.2 s pause is kept), 9.0-12.0 ; padded by 2 frames
+        self.assertEqual(len(c.segments), 2)
+        self.assertAlmostEqual(c.segments[0]['start'], 1.0 - 2 / 30, places=3)
+        self.assertIsNone(c.frame_of(0, 7.0))          # the long silence is cut
+        f = c.frame_of(0, 9.0)
+        self.assertEqual(f, c.segments[1]['out_start'] + 2)
+        c2 = self.make_case([{'src': 0, 'start': 2.0, 'end': 2.5, 'why': 'retake'}])
+        self.assertIsNone(c2.frame_of(0, 2.2))
+        self.assertEqual(len(c2.segments), 3)
+        self.assertEqual(c2.total, sum(s['out_end'] - s['out_start'] for s in c2.segments))
+
+    def test_voice_onset(self):
+        c = self.make_case()
+        self.assertEqual(c.voice_onset(0, 9.2), 9.0)    # Whisper late: snap back to the voice
+        self.assertEqual(c.voice_onset(0, 4.0), 4.0)    # inside talk: keep
+
+
+class Miru(unittest.TestCase):
+    def test_video_id_is_ascii(self):
+        import miru_sync
+        self.assertRegex(miru_sync.default_video_id(Path('/a/20261021-テスト1')), r'^[a-z0-9][a-z0-9-]{0,69}$')
+        self.assertEqual(miru_sync.default_video_id(Path('/a/20261021-my-talk')), '20261021-my-talk')
+
+
+if __name__ == '__main__':
+    unittest.main()

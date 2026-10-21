@@ -1,0 +1,19 @@
+{
+  "name": "ai-video-editing-lite",
+  "version": "0.1.0",
+  "description": "自分のチャンネルの編集の作風を学んで覚え、撮影素材からカット・字幕・強調入りのMP4を作る。確認サイトMIRUで修正。",
+  "author": {
+    "name": "fuuuuuuma"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "AI動画編集 lite",
+    "shortDescription": "チャンネルの作風を覚えて、カット・字幕・強調まで自動で編集",
+    "developerName": "fuuuuuuma",
+    "category": "Creative",
+    "capabilities": [],
+    "defaultPrompt": [
+      "$ai-video-editing-lite"
+    ]
+  }
+}

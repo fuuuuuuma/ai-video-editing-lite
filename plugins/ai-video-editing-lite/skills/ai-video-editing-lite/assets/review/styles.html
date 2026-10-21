@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>強調デザイン</title>
+<style>
+:root{
+  --bg:#f2f3f7; --text:#1d1d1f; --text2:#6e6e73; --text3:#8e8e93;
+  --accent:#007aff; --accent-soft:rgba(0,122,255,.12); --ok:#34c759; --ok-soft:rgba(52,199,89,.14); --no:#ff3b30; --no-soft:rgba(255,59,48,.12);
+  --fill:rgba(118,118,128,.12); --fill2:rgba(118,118,128,.08); --hair:rgba(60,60,67,.12);
+  --glass:rgba(255,255,255,.62); --glass-strong:rgba(255,255,255,.82); --glass-border:rgba(255,255,255,.8);
+  --shadow:0 18px 50px -22px rgba(30,41,70,.25), 0 2px 8px rgba(30,41,70,.06);
+  --ease:cubic-bezier(.32,.72,0,1); --spring:cubic-bezier(.34,1.56,.64,1);
+  --r:22px; --gap:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{color:var(--text); -webkit-font-smoothing:antialiased;
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text","Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;
+  background:radial-gradient(900px 600px at 0% -10%, rgba(0,122,255,.13), transparent 60%),
+             radial-gradient(800px 600px at 110% 0%, rgba(175,82,222,.10), transparent 60%),
+             radial-gradient(900px 700px at 50% 120%, rgba(48,176,199,.12), transparent 60%), var(--bg);
+  background-attachment:fixed; min-height:100vh; padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+button,textarea{font:inherit;color:inherit}
+button{-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+.glass{background:var(--glass); background-image:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,.2));
+  -webkit-backdrop-filter:blur(28px) saturate(180%); backdrop-filter:blur(28px) saturate(180%);
+  border:1px solid var(--glass-border); box-shadow:inset 0 1px 0 rgba(255,255,255,.95), var(--shadow)}
+
+/* header */
+header{position:sticky; top:0; z-index:20; padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+  background:rgba(255,255,255,.6); -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
+  border-bottom:1px solid rgba(60,60,67,.08)}
+.hrow{display:flex; align-items:center; gap:10px; max-width:1180px; margin:0 auto}
+h1{font-size:19px; font-weight:700; letter-spacing:-.01em; margin:0}
+.grow{flex:1}
+.save{display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); padding:4px 10px; border-radius:99px; background:var(--fill2)}
+.close{width:34px; height:34px; border-radius:50%; border:0; background:var(--fill); display:grid; place-items:center; cursor:pointer; transition:transform .2s var(--ease), background .2s}
+.close:hover{background:rgba(118,118,128,.2)} .close:active{transform:scale(.9)} .close svg{width:15px; height:15px}
+.save i{width:7px; height:7px; border-radius:50%; background:var(--ok); transition:background .3s}
+.save.busy i{background:#ff9f0a; animation:pulse 1s ease-in-out infinite}
+.seg{position:relative; display:grid; grid-auto-flow:column; grid-auto-columns:1fr; padding:3px; background:var(--fill); border-radius:12px; margin:10px auto 0; max-width:1180px}
+.seg .ind{position:absolute; top:3px; bottom:3px; left:3px; border-radius:9px; background:#fff; box-shadow:0 3px 8px -2px rgba(0,0,0,.14); transition:transform .45s var(--spring), width .3s var(--ease)}
+.seg button{position:relative; z-index:1; border:0; background:none; height:34px; border-radius:9px; font-size:13px; font-weight:600; color:var(--text2); cursor:pointer; white-space:nowrap}
+.seg button.on{color:var(--text)}
+.seg button .n{font:600 11px ui-monospace,Menlo,monospace; margin-left:4px; color:var(--text3)}
+
+/* layout */
+main{max-width:1180px; margin:0 auto; padding:14px 16px 0}
+.role{margin:0 0 22px; opacity:0; transform:translateY(14px); animation:rise .6s var(--ease) forwards}
+.role h2{display:flex; align-items:center; gap:8px; font-size:17px; font-weight:700; margin:6px 4px 10px}
+.role h2 .dot{width:10px; height:10px; border-radius:3px; transform:rotate(45deg); background:var(--c,#ff9f0a)}
+.role h2 .k{font:600 11px ui-monospace,Menlo,monospace; color:var(--text3); font-weight:500}
+.rules{display:grid; gap:8px; grid-template-columns:1fr; margin:0 0 12px}
+.rule{border-radius:16px; padding:10px 12px; font-size:13.5px}
+.rule b{display:block; font-size:11.5px; letter-spacing:.04em; color:var(--text2); margin-bottom:2px}
+.rule.use{background:rgba(52,199,89,.10)} .rule.use b{color:#1d8a3a}
+.rule.avoid{background:rgba(255,59,48,.08)} .rule.avoid b{color:#b42318}
+.used{display:flex; gap:6px; flex-wrap:wrap; margin:-2px 0 12px}
+.chip{font-size:12px; padding:4px 10px; border-radius:99px; background:rgba(255,255,255,.75); border:1px solid rgba(60,60,67,.08); color:var(--text2)}
+.grid{display:grid; gap:var(--gap); grid-template-columns:1fr}
+@media (min-width:720px){ .rules{grid-template-columns:1fr 1fr} .grid{grid-template-columns:1fr 1fr} }
+@media (min-width:1080px){ .grid{grid-template-columns:repeat(3,1fr)} }
+
+/* card */
+.card{border-radius:var(--r); overflow:hidden; position:relative; transition:box-shadow .35s var(--ease), transform .35s var(--ease), opacity .3s;
+  opacity:0; transform:translateY(16px) scale(.98); animation:rise .55s var(--ease) forwards}
+.card.adopt{box-shadow:0 0 0 2.5px var(--ok), var(--shadow)}
+.card.reject{opacity:.6}
+.card.reject .shot img{filter:saturate(.3)}
+.shot{position:relative; aspect-ratio:16/9; background:#d8dbe2; cursor:zoom-in; overflow:hidden}
+.shot img{width:100%; height:100%; object-fit:cover; display:block; opacity:0; transform:scale(1.04); transition:opacity .5s var(--ease), transform .7s var(--ease), filter .3s}
+.shot img.in{opacity:1; transform:none}
+.shot .sk{position:absolute; inset:0}
+.shot .sk.none{animation:none; background:rgba(118,118,128,.12)}
+.badge{position:absolute; top:10px; left:10px; z-index:2; font:600 11px ui-monospace,Menlo,monospace; color:#fff; padding:4px 9px; border-radius:99px;
+  background:rgba(28,28,30,.45); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px)}
+.now{position:absolute; top:10px; right:10px; z-index:2; font-size:11px; font-weight:700; color:#0b5b6b; padding:4px 9px; border-radius:99px; background:rgba(255,255,255,.85)}
+.stamp{position:absolute; right:12px; bottom:12px; z-index:2; width:40px; height:40px; border-radius:50%; display:grid; place-items:center; color:#fff;
+  transform:scale(0); transition:transform .45s var(--spring)}
+.stamp svg{width:22px; height:22px}
+.card.adopt .stamp.ok{transform:scale(1); background:var(--ok)}
+.card.reject .stamp.no{transform:scale(1); background:var(--no)}
+.body{padding:12px 14px 14px}
+.name{font-size:14.5px; font-weight:650; line-height:1.4}
+.acts{display:grid; grid-template-columns:1fr 1fr auto; gap:8px; margin-top:10px}
+.btn{height:42px; border-radius:13px; border:1px solid rgba(60,60,67,.12); background:rgba(255,255,255,.85); font-size:14px; font-weight:600; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; transition:transform .2s var(--ease), background .25s, color .25s, border-color .25s}
+.btn:active{transform:scale(.95)}
+.btn svg{width:17px; height:17px}
+.btn.ok.on{background:var(--ok); color:#fff; border-color:transparent}
+.btn.no.on{background:var(--no); color:#fff; border-color:transparent}
+.btn.memo{width:42px; padding:0}
+.btn.memo.has{color:var(--accent); border-color:rgba(0,122,255,.35)}
+.memo-box{display:grid; grid-template-rows:0fr; transition:grid-template-rows .35s var(--ease)}
+.memo-box.open{grid-template-rows:1fr}
+.memo-box > div{overflow:hidden}
+.memo-box textarea{width:100%; margin-top:10px; min-height:70px; resize:vertical; border-radius:12px; border:1px solid rgba(60,60,67,.14); background:#fff; padding:9px 11px; font-size:14px; outline:none}
+.memo-box textarea:focus{border-color:rgba(0,122,255,.55); box-shadow:0 0 0 4px rgba(0,122,255,.12)}
+.empty{text-align:center; color:var(--text3); padding:40px 0}
+
+/* viewer */
+#viewer{position:fixed; inset:0; z-index:50; background:rgba(10,10,12,.86); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .3s var(--ease)}
+#viewer.open{opacity:1; pointer-events:auto}
+#viewer img{max-width:min(96vw,1400px); max-height:78vh; border-radius:14px; transform:scale(.94); transition:transform .45s var(--spring)}
+#viewer.open img{transform:none}
+#viewer .cap{color:#fff; margin-top:14px; font-size:14px; text-align:center; padding:0 16px}
+#viewer .vbtns{display:flex; gap:10px; margin-top:12px}
+#viewer .vbtns button{height:40px; padding:0 16px; border-radius:12px; border:0; background:rgba(255,255,255,.16); color:#fff; font-weight:600; cursor:pointer}
+
+/* toast */
+.toast{position:fixed; left:50%; bottom:calc(22px + env(safe-area-inset-bottom)); z-index:60; transform:translate(-50%,16px) scale(.96); opacity:0; pointer-events:none;
+  padding:10px 16px; border-radius:99px; font-size:13px; font-weight:600; transition:opacity .25s, transform .4s var(--spring)}
+.toast.show{opacity:1; transform:translate(-50%,0) scale(1)}
+
+/* skeleton */
+#skel{position:fixed; inset:0; z-index:100; background:inherit;
+  background:radial-gradient(900px 600px at 0% -10%, rgba(0,122,255,.13), transparent 60%), radial-gradient(800px 600px at 110% 0%, rgba(175,82,222,.10), transparent 60%), var(--bg);
+  transition:opacity .5s var(--ease), transform .6s var(--ease); overflow:hidden}
+#skel.out{opacity:0; transform:scale(1.015); pointer-events:none}
+.sk{border-radius:12px; background:linear-gradient(100deg,rgba(118,118,128,.10) 20%,rgba(118,118,128,.20) 40%,rgba(118,118,128,.10) 60%); background-size:300% 100%; animation:shimmer 1.4s linear infinite}
+.skin{max-width:1180px; margin:0 auto; padding:calc(14px + env(safe-area-inset-top)) 16px}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
+@keyframes rise{to{opacity:1; transform:none}}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important; animation-iteration-count:1!important; transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+<div id="skel" aria-hidden="true"><div class="skin">
+  <div style="display:flex;gap:10px;align-items:center"><div class="sk" style="width:150px;height:22px"></div><span class="grow"></span><div class="sk" style="width:80px;height:24px;border-radius:99px"></div></div>
+  <div class="sk" style="height:40px;margin-top:14px"></div>
+  <div class="sk" style="width:200px;height:20px;margin-top:22px"></div>
+  <div class="sk" style="height:60px;margin-top:12px;border-radius:16px"></div>
+  <div class="sk" style="height:60px;margin-top:8px;border-radius:16px"></div>
+  <div class="sk" style="aspect-ratio:16/9;margin-top:14px;border-radius:22px"></div>
+  <div class="sk" style="height:76px;margin-top:8px;border-radius:16px"></div>
+  <div class="sk" style="aspect-ratio:16/9;margin-top:14px;border-radius:22px"></div>
+</div></div>
+
+<header>
+  <div class="hrow"><h1>強調デザイン</h1><span class="grow"></span><span class="save" id="save"><i></i><span>保存済み</span></span>
+    <button class="close" id="close" hidden aria-label="閉じる" title="確認画面に戻る（Esc）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="seg" id="filter" role="tablist"><span class="ind"></span>
+    <button data-f="all" class="on">すべて<span class="n" id="nAll">0</span></button>
+    <button data-f="open">未判断<span class="n" id="nOpen">0</span></button>
+    <button data-f="adopt">採用<span class="n" id="nAdopt">0</span></button>
+  </div>
+</header>
+<main id="main"></main>
+<div id="viewer" role="dialog" aria-label="大きく見る"><img alt=""><div class="cap"></div>
+  <div class="vbtns"><button data-v="prev">前へ</button><button data-v="close">閉じる</button><button data-v="next">次へ</button></div></div>
+<div class="toast glass" id="toast"></div>
+
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const ICON={ok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  no:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  memo:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>'};
+const ROLE_COLOR={assertion:'#1d1d1f', product:'#30b0c7', number:'#ff9f0a', warning:'#ff3b30', strong_negation:'#c80000', light_positive:'#5ac8fa', achievement:'#d9ab38', second_gift:'#af52de', question:'#ff7a00'};
+let D=null, choices={}, filter='all', order=[], saveT=null;
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1700); }
+function stateOf(id){ return (choices[id]||{}).state||'open'; }
+// rejected designs are not sent by the server: one rejected now stays (faded) until the next load
+function counts(){ const live=order.filter(d=>stateOf(d.id)!=='reject'), ad=live.filter(d=>stateOf(d.id)==='adopt').length;
+  $('#nAll').textContent=live.length; $('#nAdopt').textContent=ad; $('#nOpen').textContent=live.length-ad; }
+function moveInd(){ const seg=$('#filter'), b=seg.querySelector(`button[data-f="${filter}"]`), ind=seg.querySelector('.ind');
+  ind.style.width=b.offsetWidth+'px'; ind.style.transform=`translateX(${b.offsetLeft-3}px)`; }
+function render(){
+  const main=$('#main'); main.innerHTML=''; let shown=0, delay=0;
+  D.roles.forEach((r,ri)=>{
+    const ds=r.designs.filter(d=>filter==='all'||stateOf(d.id)===filter||(filter==='open'&&stateOf(d.id)==='reject')); if(!ds.length) return;
+    const sec=document.createElement('section'); sec.className='role'; sec.style.animationDelay=(ri*40)+'ms'; sec.style.setProperty('--c',ROLE_COLOR[r.role]||'#ff9f0a');
+    sec.innerHTML=`<h2><span class="dot"></span>${esc(r.label)}<span class="k">${esc(r.role)}</span></h2>
+      <div class="rules"><div class="rule use glass"><b>使う時</b>${esc(r.when)}</div><div class="rule avoid glass"><b>使わない時</b>${esc(r.avoid)}</div></div>
+      ${r.used_in_case.length?`<div class="used">${r.used_in_case.map(u=>`<span class="chip" title="${esc(u.why)}">${esc(u.text)}</span>`).join('')}</div>`:''}
+      <div class="grid"></div>`;
+    const grid=sec.querySelector('.grid');
+    ds.forEach(d=>{ const c=document.createElement('article'); const st=stateOf(d.id); const memo=(choices[d.id]||{}).memo||'';
+      c.className='card glass'+(st!=='open'?' '+st:''); c.dataset.id=d.id; c.style.animationDelay=(delay++*35)+'ms';
+      c.innerHTML=`<div class="shot"><div class="sk"></div><img alt="${esc(d.name)}" loading="lazy"><span class="badge">${esc(d.id)}</span>${d.current?'<span class="now">No.51 で使用</span>':''}
+          <span class="stamp ok">${ICON.ok}</span><span class="stamp no">${ICON.no}</span></div>
+        <div class="body"><div class="name">${esc(d.name)}</div>
+          <div class="acts"><button class="btn ok${st==='adopt'?' on':''}" data-a="adopt">${ICON.ok}採用</button><button class="btn no${st==='reject'?' on':''}" data-a="reject">${ICON.no}不採用</button>
+            <button class="btn memo${memo?' has':''}" data-a="memo" aria-label="メモ">${ICON.memo}</button></div>
+          <div class="memo-box${memo?' open':''}"><div><textarea placeholder="気になる所・直してほしい所">${esc(memo)}</textarea></div></div></div>`;
+      const img=c.querySelector('img'); img.onload=()=>{ img.classList.add('in'); c.querySelector('.sk').remove(); };
+      if(d.media) img.src='/media/'+d.media+'?v='+encodeURIComponent(d.v||''); else c.querySelector('.sk').classList.add('none');
+      grid.appendChild(c); shown++; });
+    main.appendChild(sec); });
+  if(!shown) main.innerHTML=`<div class="empty">${filter==='adopt'?'採用したデザインはまだありません':filter==='open'?'未判断のデザインはありません':'デザインがありません'}</div>`;
+  counts();
+}
+function setState(id, st){ const cur=stateOf(id); const next=cur===st?'open':st; choices[id]={...(choices[id]||{}), state:next, at:new Date().toISOString()};
+  const c=document.querySelector(`.card[data-id="${id}"]`);
+  if(c){ c.classList.remove('adopt','reject'); if(next!=='open') c.classList.add(next);
+    c.querySelector('[data-a=adopt]').classList.toggle('on',next==='adopt'); c.querySelector('[data-a=reject]').classList.toggle('on',next==='reject');
+    if(c.animate) c.animate([{transform:'scale(1)'},{transform:'scale(.985)'},{transform:'scale(1)'}],{duration:320,easing:'cubic-bezier(.34,1.56,.64,1)'}); }
+  counts(); save(); if(filter==='adopt' && next!=='adopt') setTimeout(render,380); }
+function save(){ const s=$('#save'); s.classList.add('busy'); s.querySelector('span').textContent='保存中'; clearTimeout(saveT);
+  saveT=setTimeout(async()=>{ try{ const r=await fetch('/api/style-choices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({choices})});
+      if(!r.ok) throw new Error((await r.json()).error||r.status); s.classList.remove('busy'); s.querySelector('span').textContent='保存済み';
+      try{ parent!==window && parent.postMessage({type:'styles:saved'},location.origin); }catch{} }
+    catch(e){ s.classList.remove('busy'); s.querySelector('span').textContent='保存できませんでした'; toast('保存できませんでした：'+e.message); } },300); }
+// viewer
+let vIdx=-1;
+function openViewer(id){ vIdx=order.findIndex(d=>d.id===id); showV(); $('#viewer').classList.add('open'); }
+function showV(){ const d=order[vIdx]; if(!d) return; const v=$('#viewer'); v.querySelector('img').src='/media/'+d.media+'?v='+encodeURIComponent(d.v||'');
+  v.querySelector('.cap').textContent=`${d.id}　${d.role_label}：${d.name}`; }
+function closeV(){ $('#viewer').classList.remove('open'); }
+document.addEventListener('click',e=>{
+  const fb=e.target.closest('#filter button'); if(fb){ filter=fb.dataset.f; document.querySelectorAll('#filter button').forEach(b=>b.classList.toggle('on',b===fb)); moveInd(); render(); return; }
+  const v=e.target.closest('[data-v]'); if(v){ const k=v.dataset.v; if(k==='close') closeV(); else { vIdx=(vIdx+(k==='next'?1:-1)+order.length)%order.length; showV(); } return; }
+  if(e.target.id==='viewer'){ closeV(); return; }
+  const card=e.target.closest('.card'); if(!card) return; const id=card.dataset.id;
+  if(e.target.closest('.shot')){ openViewer(id); return; }
+  const b=e.target.closest('[data-a]'); if(!b) return;
+  if(b.dataset.a==='memo'){ const box=card.querySelector('.memo-box'); box.classList.toggle('open'); if(box.classList.contains('open')) setTimeout(()=>box.querySelector('textarea').focus(),200); return; }
+  setState(id, b.dataset.a);
+});
+document.addEventListener('input',e=>{ const ta=e.target.closest('.memo-box textarea'); if(!ta) return; const id=ta.closest('.card').dataset.id;
+  choices[id]={...(choices[id]||{state:'open'}), memo:ta.value, at:new Date().toISOString()}; ta.closest('.card').querySelector('[data-a=memo]').classList.toggle('has',!!ta.value); save(); });
+// opened over the review page (?embed=1): a close button, Esc closes too
+const EMBED=new URLSearchParams(location.search).has('embed');
+function closeSelf(){ try{ parent.postMessage({type:'styles:close'},location.origin); }catch{} }
+if(EMBED){ $('#close').hidden=false; $('#close').onclick=closeSelf; }
+document.addEventListener('keydown',e=>{ if(EMBED && e.key==='Escape' && !$('#viewer').classList.contains('open')){ closeSelf(); return; } });
+document.addEventListener('keydown',e=>{ if(!$('#viewer').classList.contains('open')) return; if(e.key==='Escape') closeV(); else if(e.key==='ArrowRight'){ vIdx=(vIdx+1)%order.length; showV(); } else if(e.key==='ArrowLeft'){ vIdx=(vIdx-1+order.length)%order.length; showV(); } });
+let tx=null; $('#viewer').addEventListener('touchstart',e=>{ tx=e.touches[0].clientX; },{passive:true});
+$('#viewer').addEventListener('touchend',e=>{ if(tx==null) return; const dx=e.changedTouches[0].clientX-tx; tx=null; if(Math.abs(dx)>50){ vIdx=(vIdx+(dx<0?1:-1)+order.length)%order.length; showV(); } });
+window.addEventListener('resize',moveInd);
+(async()=>{
+  try{ D=await fetch('/api/style-catalog').then(async r=>{ const d=await r.json(); if(!r.ok) throw new Error(d.error||r.status); return d; });
+    choices={}; D.roles.forEach(r=>r.designs.forEach(d=>{ choices[d.id]={state:d.status||'open', memo:d.memo||''}; }));
+    order=D.roles.flatMap(r=>r.designs.map(d=>({...d, role:r.role, role_label:r.label})));
+    render(); moveInd(); }
+  catch(e){ $('#main').innerHTML=`<div class="empty">読み込めませんでした：${esc(e.message)}</div>`; }
+  const sk=$('#skel'); sk.classList.add('out'); setTimeout(()=>sk.remove(),700);
+})();
+</script>
+</body>
+</html>
