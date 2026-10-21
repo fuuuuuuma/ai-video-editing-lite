@@ -1796,6 +1796,16 @@ async function copyTc(){ const t=tc(frameNow()); const b=$('#tcCopy');
   b.classList.add('done'); b.querySelector('span').textContent='コピーしました'; clearTimeout(b._t);
   b._t=setTimeout(()=>{ b.classList.remove('done'); b.querySelector('span').textContent='コピー'; },1400); toast(`${t} をコピーしました`); }
 let stageScale=1;
+// the whole page fits the window without scrolling up and down (2026-10-21): the picture takes the height the controls
+// and the timeline leave (measured, so a wrapped line or a taller timeline is counted)
+function fitLayout(){
+  if(innerWidth<=960){ document.documentElement.style.removeProperty('--stage-max-h'); return; }
+  const left=$('#left'); if(!left) return; const cs=getComputedStyle(document.documentElement);
+  const gap=parseFloat(cs.getPropertyValue('--gap'))||14, head=parseFloat(cs.getPropertyValue('--header-h'))||56;
+  const others=[...left.children].filter(el=>el.id!=='stageWrap' && getComputedStyle(el).display!=='none');
+  const used=others.reduce((n,el)=>n+el.getBoundingClientRect().height,0)+gap*others.length;
+  const avail=Math.floor(innerHeight-head-gap-18-used-10);
+  document.documentElement.style.setProperty('--stage-max-h',Math.max(180,avail)+'px'); }
 function fitStage(){ const w=$('#stageWrap').clientWidth, h=$('#stageWrap').clientHeight; const s=Math.min(w/M.width,h/M.height); stageScale=s;
   $('#stage').style.transform=`translate(${(w-M.width*s)/2}px,${(h-M.height*s)/2}px) scale(${s})`; }
 function setTab(t, animate){
@@ -1932,6 +1942,8 @@ async function init(){
   buildTranscript(); setupCanvasInput();
   let tab='caps'; try{ tab=localStorage.getItem('review.tab')||'caps'; }catch{} setTab(['notes','edits'].includes(tab)?tab:'caps',false);
   new ResizeObserver(()=>{ fitStage(); tlDirty=true; render(true); }).observe($('#stageWrap')); fitStage();
+  { const ro=new ResizeObserver(()=>fitLayout()); for(const el of $('#left').children) if(el.id!=='stageWrap') ro.observe(el);
+    addEventListener('resize',fitLayout); fitLayout(); }
   new ResizeObserver(()=>{ tlDirty=true; }).observe($('#timeline'));
   // refresh notes written by the agent (status/reply) without reloading
   setInterval(async()=>{ if(document.activeElement && ['TEXTAREA','INPUT'].includes(document.activeElement.tagName)) return;
