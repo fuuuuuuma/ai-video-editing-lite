@@ -1139,8 +1139,11 @@ def check_carried(plan, groups, frames_of=None):
         return any(x.get('op') == 'delete' and (x.get('caption_id') == tid or _words(x.get('old_text')) in words) for _, x in allit)
 
     def covered(name, sec, near):
-        f = ed.frame_of({'name': name, 'seconds': sec}, near)
-        return f is not None and abs(f - near) < 1500
+        # strictly inside a kept clip: frame_of allows half a frame before a clip, which made a 1-frame cut
+        # next to a kept clip look kept (No.52 v6, 2026-10-21)
+        fps = ed.fps
+        return any(_name(c) == name and _src(c) - 1e-6 <= sec < _src(c) + (c['end'] - c['start']) / fps - 1e-6
+                   and abs(c['start'] + (sec - _src(c)) * fps - near) < 1500 for c in plan['clips'])
 
     for k, (ver, it) in enumerate(allit):
         op, near = it.get('op'), near_of(it)
