@@ -12,8 +12,9 @@
                   Decisions already made on the site are kept (the site is the master since 2026-10-20).
   miru_sync.py designs-pull [--channel my-ch] [--slug my-ch]  # the site's adopt / reject / memo back into that file
 
-The site and the key: MIRU_URL (default https://miru.pinpon-fuuma.workers.dev) and MIRU_TOKEN, or the file
-~/.config/miru/token (one line, made on the site's 設定 → Claude Code とつなぐ). The key is never printed.
+The site and the key: your own MIRU (set up with ../../miru/SETUP.md). MIRU_URL and MIRU_TOKEN, or the files
+~/.config/miru/url and ~/.config/miru/token (one line each, made on the site's 設定 → Claude Code・Codex とつなぐ).
+There is no default site (since 0.2.0 everyone runs their own MIRU on their own Cloudflare). The key is never printed.
 
 The video's name on the site is kept in <case>/.akari/miru.json. When the name is already used by someone else's
 channel the site gives a new one (no51-xxxxx); publish saves it there and pull / reply / style read it back.
@@ -52,7 +53,17 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-SITE = os.environ.get('MIRU_URL', 'https://miru.pinpon-fuuma.workers.dev').rstrip('/')
+def _site():
+    u = os.environ.get('MIRU_URL') or ''
+    f = Path.home() / '.config/miru/url'
+    if not u and f.exists():
+        u = f.read_text().strip()
+    return u.rstrip('/')
+
+
+SITE = _site()
+NO_SITE = ('MIRU の場所がありません: 自分の MIRU を立ててから（このスキルの miru/SETUP.md、Claude Code は /ai-video-editing-lite:miru-setup、'
+           'Codex は $miru-setup）、サイトの「設定 → Claude Code・Codex とつなぐ」のコマンドで ~/.config/miru/url と token を置いてください')
 CHUNK = 10            # seconds per audio piece
 RATE = 48000
 PART = 50 * 1024 * 1024
@@ -73,11 +84,13 @@ def token():
     if not t and f.exists():
         t = f.read_text().strip()
     if not t.startswith('miru_'):
-        raise SystemExit('MIRU の鍵がありません: サイトの「設定 → Claude Code とつなぐ」で作り、~/.config/miru/token に置いてください')
+        raise SystemExit('MIRU の鍵がありません: サイトの「設定 → Claude Code・Codex とつなぐ」で作り、~/.config/miru/token に置いてください')
     return t
 
 
 def call(method, path, body=None, data=None, ctype=None, headers=None):
+    if not SITE.startswith(('https://', 'http://localhost', 'http://127.0.0.1')):
+        raise SystemExit(NO_SITE)
     """One request to the site, retried on 429 / 5xx / dropped connections. Other failures raise MiruError."""
     # Cloudflare の Browser Integrity Check は Python の既定の名乗り（Python-urllib）を 403（1010）で止める
     h = {'authorization': f'Bearer {token()}', 'user-agent': 'miru-sync/1.1', **(headers or {})}
@@ -103,7 +116,7 @@ def call(method, path, body=None, data=None, ctype=None, headers=None):
                 time.sleep(min(60, wait) + random.random())
                 continue
             if e.code == 401:
-                msg = '鍵が使えません（期限切れか、消されています）。サイトの「設定 → Claude Code とつなぐ」で作り直し、~/.config/miru/token に置いてください'
+                msg = '鍵が使えません（期限切れか、消されています）。サイトの「設定 → Claude Code・Codex とつなぐ」で作り直し、~/.config/miru/token に置いてください'
             elif e.code == 402:
                 msg = f'容量が足りません: {msg}'
             raise MiruError(f'{method} {path.split("?")[0]}: {e.code} {msg}', e.code)

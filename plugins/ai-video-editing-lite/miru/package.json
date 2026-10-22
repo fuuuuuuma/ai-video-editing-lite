@@ -1,0 +1,22 @@
+{
+  "name": "miru",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5190",
+    "build": "node tools/sync-review.mjs && vite build",
+    "worker": "wrangler dev -c wrangler.dev.jsonc --port 8790 --local",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
+    "deploy": "npm run build && wrangler deploy",
+    "sync-review": "node tools/sync-review.mjs",
+    "setup": "node tools/setup.mjs"
+  },
+  "devDependencies": {
+    "happy-dom": "20.12.0",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "4.1.11",
+    "wrangler": "^4.151.1"
+  }
+}

@@ -1,0 +1,41 @@
+// 手元の試しだけ（AI なし・仮ログインあり）。npm run worker で使う。本番は wrangler.jsonc
+{
+ "name": "miru-dev",
+ "main": "worker/index.ts",
+ "compatibility_date": "2026-08-20",
+ "workers_dev": true,
+ "assets": {
+  "directory": "./dist",
+  "binding": "ASSETS",
+  "not_found_handling": "single-page-application",
+  "run_worker_first": [
+   "/api/*",
+   "/m/*",
+   "/auth/*",
+   "/mcp"
+  ]
+ },
+ "vars": {
+  "GOOGLE_CLIENT_ID": "",
+  "FREE_QUOTA_BYTES": "2147483648",
+  "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  "DEV_LOGIN": "1"
+ },
+ "d1_databases": [
+  {
+   "binding": "DB",
+   "database_name": "miru",
+   "database_id": "00000000-0000-0000-0000-000000000000",
+   "migrations_dir": "migrations"
+  }
+ ],
+ "r2_buckets": [
+  {
+   "binding": "MEDIA",
+   "bucket_name": "miru-media"
+  }
+ ],
+ "observability": {
+  "enabled": true
+ }
+}

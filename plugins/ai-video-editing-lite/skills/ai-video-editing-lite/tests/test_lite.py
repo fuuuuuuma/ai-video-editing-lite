@@ -103,6 +103,22 @@ class Miru(unittest.TestCase):
         self.assertRegex(miru_sync.default_video_id(Path('/a/20261021-テスト1')), r'^[a-z0-9][a-z0-9-]{0,69}$')
         self.assertEqual(miru_sync.default_video_id(Path('/a/20261021-my-talk')), '20261021-my-talk')
 
+    def test_no_default_site(self):
+        # 0.2.0: 共用のサイトへは上げない。自分の MIRU（~/.config/miru/url か MIRU_URL）が無ければ立て方を案内して止まる
+        home = tempfile.mkdtemp(prefix='aive-lite-home-')
+        env = {k: v for k, v in os.environ.items() if k not in ('MIRU_URL', 'MIRU_TOKEN')}
+        env.update(HOME=home, MIRU_TOKEN='miru_test')
+        r = subprocess.run([sys.executable, '-I', '-c', 'import sys; sys.path.insert(0, sys.argv[1]); import miru_sync; miru_sync.call("GET", "/api/me")', str(SCRIPTS)],
+                           env=env, capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('miru-setup', r.stderr)
+        self.assertNotIn('pinpon', (SCRIPTS / 'miru_sync.py').read_text() + (SCRIPTS / 'doctor.py').read_text())
+        Path(home, '.config/miru').mkdir(parents=True)
+        Path(home, '.config/miru/url').write_text('https://miru.example.workers.dev/\n')
+        r = subprocess.run([sys.executable, '-I', '-c', 'import sys; sys.path.insert(0, sys.argv[1]); import miru_sync; print(miru_sync.SITE)', str(SCRIPTS)],
+                           env=env, capture_output=True, text=True)
+        self.assertEqual(r.stdout.strip(), 'https://miru.example.workers.dev')
+
 
 if __name__ == '__main__':
     unittest.main()

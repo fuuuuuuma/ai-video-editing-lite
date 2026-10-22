@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f4f6fa">
+<meta name="robots" content="noindex">
+<title>MIRU</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%233d9bff'/%3E%3Cstop offset='1' stop-color='%237a5cff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-size='34' font-family='system-ui' font-weight='900' fill='white' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E">
+<style>
+  /* 最初の描画までの全画面スケルトン（CSS が届く前から出す） */
+  body{margin:0;background:#f4f6fa;font-family:-apple-system,system-ui,sans-serif}
+  .boot{padding:16px;max-width:1100px;margin:0 auto}
+  .boot i{display:block;border-radius:12px;background:linear-gradient(90deg,#e8edf4 25%,#f6f8fb 50%,#e8edf4 75%);background-size:300% 100%;animation:b 1.3s ease-in-out infinite}
+  @keyframes b{from{background-position:100% 0}to{background-position:0 0}}
+</style>
+</head>
+<body>
+<div id="app"><div class="boot">
+  <i style="height:30px;width:120px;margin:8px 0 22px"></i><i style="height:34px;width:60%;margin-bottom:18px"></i>
+  <i style="height:36px;width:100%;margin-bottom:16px;border-radius:999px"></i>
+  <i style="height:84px;margin-bottom:10px"></i><i style="height:84px;margin-bottom:10px"></i><i style="height:84px;margin-bottom:10px"></i><i style="height:84px"></i>
+</div></div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

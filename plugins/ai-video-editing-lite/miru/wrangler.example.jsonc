@@ -1,0 +1,27 @@
+// 自分の Cloudflare に立てる MIRU の設定のひな形（2026-10-22）。
+// `node tools/setup.mjs` がこれを写して wrangler.jsonc を作り、__ で囲んだ所を埋める。手で直すのは GOOGLE_CLIENT_ID だけで足りる
+{
+  "name": "__NAME__",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-08-20",
+  "workers_dev": true,
+  "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/m/*", "/auth/*", "/mcp"] },
+  "vars": {
+    // Google でログイン。クライアント ID は公開してよい値。シークレットは `wrangler secret put GOOGLE_CLIENT_SECRET` で入れる（ここには書かない）
+    "GOOGLE_CLIENT_ID": "__GOOGLE_CLIENT_ID__",
+    // 修正指示を読みやすく整える AI。使えないとき（無料の枠を超えた・有料プランの型など）は文をそのまま返す
+    "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    // チャンネルを作れる人（自分のメール。カンマで何人でも）。ほかの人は招待されたチャンネルだけを見る
+    "SITE_OWNERS": "__OWNER__",
+    "CONTACT_EMAIL": "__OWNER__",
+    "FREE_QUOTA_BYTES": "2147483648",
+    "CHANNEL_LIMIT": "3",
+    "AI_DAILY_LIMIT": "200"
+  },
+  // 毎日の掃除（期限切れのログイン・鍵、上げ終わらない版）。日本時間 4:17
+  "triggers": { "crons": ["17 19 * * *"] },
+  "d1_databases": [{ "binding": "DB", "database_name": "__NAME__", "database_id": "__DATABASE_ID__", "migrations_dir": "migrations" }],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "__NAME__-media" }],
+  "ai": { "binding": "AI" },
+  "observability": { "enabled": true }
+}

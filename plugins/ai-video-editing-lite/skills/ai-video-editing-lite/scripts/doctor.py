@@ -38,9 +38,12 @@ missing = [k for k, (rel, sha, _) in lite.FONT_SET.items() if not (lite.FONTS / 
 item(not missing, '書体（OFL）', f'{len(lite.FONT_SET) - len(missing)}/{len(lite.FONT_SET)}', 'setup.py を実行する（ネット接続が要る）')
 cur = lite.current_slug()
 item(bool(cur), '学習したチャンネル', cur or 'まだありません', 'channel_memory.py add でチャンネルを登録し、learn.py で学ぶ', warn=True)
+url = os.environ.get('MIRU_URL') or ((Path.home() / '.config/miru/url').read_text().strip() if (Path.home() / '.config/miru/url').exists() else '')
+item(bool(url), '自分の MIRU（確認サイトに上げるとき）', url or 'まだありません',
+     'miru-setup（Claude Code は /ai-video-editing-lite:miru-setup、Codex は $miru-setup）で自分の Cloudflare に立てる', warn=True)
 tok = os.environ.get('MIRU_TOKEN') or ((Path.home() / '.config/miru/token').read_text().strip() if (Path.home() / '.config/miru/token').exists() else '')
 item(tok.startswith('miru_'), 'MIRU の鍵（確認サイトに上げるとき）', 'あり' if tok.startswith('miru_') else 'なし',
-     'MIRU（https://miru.pinpon-fuuma.workers.dev）に Google でログイン →「設定 → Claude Code とつなぐ」で鍵を作り、~/.config/miru/token に置く', warn=True)
+     '自分の MIRU に Google でログイン →「設定 → Claude Code・Codex とつなぐ」で鍵を作り、画面のコマンドで ~/.config/miru/token と url を置く', warn=True)
 free = shutil.disk_usage(str(Path.home())).free / 1e9
 item(free > 20, '空き容量', f'{free:.0f}GB', '作業用に 20GB ほど空ける（書き出しと一時ファイル）', warn=True)
 print(json.dumps(rows, ensure_ascii=False, indent=1))

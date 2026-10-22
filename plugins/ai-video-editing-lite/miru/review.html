@@ -1,0 +1,2025 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta name="robots" content="noindex">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>編集プレビュー</title>
+<style>
+:root{
+  --bg:#f2f3f7; --text:#1d1d1f; --text2:#6e6e73; --text3:#8e8e93;
+  --accent:#007aff; --accent-press:#0062cc; --accent-soft:rgba(0,122,255,.12); --accent-ring:rgba(0,122,255,.35);
+  --fill:rgba(118,118,128,.12); --fill2:rgba(118,118,128,.08); --hairline:rgba(60,60,67,.12);
+  --glass:rgba(255,255,255,.58); --glass-strong:rgba(255,255,255,.80); --glass-border:rgba(255,255,255,.78);
+  --shadow:0 18px 50px -20px rgba(30,41,70,.22), 0 2px 8px rgba(30,41,70,.06);
+  --shadow-sm:0 1px 2px rgba(30,41,70,.08), 0 1px 1px rgba(30,41,70,.04);
+  --r-xl:26px; --r-lg:20px; --r-md:14px; --r-sm:10px;
+  --ease:cubic-bezier(.32,.72,0,1); --ease-out:cubic-bezier(.22,.8,.24,1);
+  --danger:#ff3b30; --ok:#34c759; --warn:#ff9f0a;
+  /* timeline colors */
+  --c-K:#30b0c7; --c-S:#c7c7cc; --c-emphasis:#ff9f0a; --c-screen:#5856d6; --c-qr:#34c759; --c-cm:#af52de;
+  --c-separator:#bf8cf0; --c-point:#e94343; --c-cut:#ff3b30; --c-comment:#ff2d55; --c-edit:#ffcc00; --done:#aeaeb2;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+  --header-h:56px; --gap:14px;
+  --stage-max-h:max(240px, calc(100vh - var(--header-h) - 470px));
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%; overscroll-behavior-x:none}   /* a sideways swipe never goes back a page (Chrome) */
+body{
+  color:var(--text); -webkit-font-smoothing:antialiased;
+  font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  background:
+    radial-gradient(1100px 700px at 6% -8%, rgba(0,122,255,.13), transparent 62%),
+    radial-gradient(900px 640px at 104% 6%, rgba(175,82,222,.10), transparent 60%),
+    radial-gradient(1000px 760px at 46% 118%, rgba(48,176,199,.13), transparent 62%),
+    var(--bg);
+  background-attachment:fixed;
+}
+button,select,input,textarea{font:inherit;color:inherit}
+button{-webkit-tap-highlight-color:transparent}
+.grow{flex:1}
+[hidden]{display:none!important}
+
+/* ------------------------------------------------ glass surfaces */
+.glass{
+  position:relative; background:var(--glass);
+  background-image:linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.18));
+  -webkit-backdrop-filter:blur(30px) saturate(180%); backdrop-filter:blur(30px) saturate(180%);
+  border:1px solid var(--glass-border); border-radius:var(--r-xl);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 .5px rgba(255,255,255,.4), var(--shadow);
+}
+.card{background:var(--glass-strong); border:1px solid rgba(255,255,255,.9); border-radius:var(--r-lg);
+  box-shadow:inset 0 1px 0 #fff, var(--shadow-sm)}
+
+/* ------------------------------------------------ buttons */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  height:34px; padding:0 13px; border-radius:var(--r-sm); cursor:pointer; white-space:nowrap;
+  background:rgba(255,255,255,.78); border:1px solid rgba(60,60,67,.10);
+  box-shadow:inset 0 1px 0 #fff, var(--shadow-sm); font-size:13px; font-weight:500;
+  transition:transform .18s var(--ease), background-color .2s, box-shadow .2s, color .2s, opacity .2s, border-color .2s;
+}
+.btn:hover{background:#fff; border-color:rgba(60,60,67,.16)}
+.btn:active{transform:scale(.95)}
+.btn:focus-visible,.seg button:focus-visible,.navg button:focus-visible,.tabs button:focus-visible{outline:none; box-shadow:0 0 0 3px var(--accent-ring)}
+.btn:disabled{opacity:.42; cursor:default; transform:none}
+.btn.primary{background:var(--accent); color:#fff; border-color:transparent; box-shadow:inset 0 1px 0 rgba(255,255,255,.25), 0 4px 14px -4px rgba(0,122,255,.55)}
+.btn.primary:hover{background:#0a84ff}
+.btn.primary:active{background:var(--accent-press)}
+.btn.on{background:var(--accent-soft); color:var(--accent); border-color:rgba(0,122,255,.28)}
+.btn.danger{color:var(--danger)}
+.btn.danger.armed{background:var(--danger); color:#fff; border-color:transparent}
+.btn.sm{height:28px; padding:0 10px; font-size:12px; border-radius:9px}
+.btn.icon{width:34px; padding:0}
+.btn svg{width:16px; height:16px; flex:none}
+
+/* segmented control */
+.seg{display:inline-flex; padding:3px; gap:2px; background:var(--fill); border-radius:12px; position:relative}
+.seg button{position:relative; z-index:1; border:0; background:transparent; height:28px; padding:0 10px; border-radius:9px;
+  font-size:12.5px; font-weight:500; cursor:pointer; color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap;
+  transition:background-color .2s, color .2s, transform .18s var(--ease), box-shadow .2s}
+.seg button:hover{background:rgba(255,255,255,.55)}
+.seg button:active{transform:scale(.93)}
+.seg button.on{background:#fff; box-shadow:0 3px 8px -2px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.04)}
+
+/* nav pill ‹ label › */
+.navg{display:inline-flex; align-items:center; height:34px; padding:0 3px; border-radius:12px; background:var(--fill2); border:1px solid rgba(60,60,67,.06)}
+.navg span{font-size:12.5px; color:var(--text2); padding:0 4px; min-width:3.2em; text-align:center; user-select:none}
+.navg button{width:30px; height:28px; border:0; border-radius:9px; background:transparent; cursor:pointer; display:grid; place-items:center; color:var(--text);
+  transition:background-color .2s, transform .18s var(--ease)}
+.navg button:hover{background:#fff; box-shadow:var(--shadow-sm)}
+.navg button:active{transform:scale(.88)}
+.navg svg{width:14px; height:14px}
+
+kbd{font:600 11px/1 var(--mono); display:inline-block; min-width:20px; text-align:center; padding:4px 6px; border-radius:6px;
+  background:#fff; border:1px solid rgba(60,60,67,.14); box-shadow:0 1px 0 rgba(60,60,67,.18); color:var(--text)}
+
+/* ------------------------------------------------ header */
+header{position:sticky; top:0; z-index:50; height:var(--header-h); display:flex; align-items:center; gap:10px; padding:0 18px;
+  background:rgba(255,255,255,.55); -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
+  border-bottom:1px solid rgba(60,60,67,.08); box-shadow:inset 0 -1px 0 rgba(255,255,255,.6)}
+header h1{font-size:15px; font-weight:650; margin:0; letter-spacing:-.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.pill{display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px; border-radius:99px; font-size:12px; font-weight:500;
+  background:var(--fill2); color:var(--text2); white-space:nowrap}
+#verSel{height:26px; border-radius:99px; border:0; background:var(--fill); padding:0 10px; font-size:12px; font-weight:500; cursor:pointer}
+#saveState .dot{width:7px; height:7px; border-radius:50%; background:var(--ok); transition:background-color .3s}
+#saveState.saving .dot{background:var(--warn); animation:pulse 1s ease-in-out infinite}
+#saveState.error{color:var(--danger)} #saveState.error .dot{background:var(--danger)}
+#newVer{display:none; background:var(--warn); color:#fff; border-color:transparent; animation:slideIn .45s var(--ease) both}
+
+/* ------------------------------------------------ layout */
+main{display:grid; grid-template-columns:minmax(0,1fr) 420px; gap:var(--gap); padding:var(--gap) 18px 18px; align-items:start;
+  opacity:0; transform:translateY(6px); transition:opacity .5s var(--ease-out), transform .6s var(--ease)}
+body.ready main{opacity:1; transform:none}
+#left{display:flex; flex-direction:column; gap:var(--gap); min-width:0}
+
+#stageWrap{position:relative; width:min(100%, calc(var(--stage-max-h) * 16 / 9)); aspect-ratio:16/9; margin:0 auto; background:#000; overflow:hidden;
+  border-radius:18px; box-shadow:0 30px 60px -28px rgba(0,0,0,.55), 0 10px 22px -12px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.6), 0 0 0 6px rgba(255,255,255,.5); cursor:pointer}
+#stage{position:absolute; left:0; top:0; width:1920px; height:1080px; transform-origin:0 0; overflow:hidden; background:#000}
+#base{position:absolute; left:0; top:0; width:1920px; height:1080px; transform-origin:0 0; z-index:1}
+#base video{position:absolute; left:0; top:0; width:1920px; height:1080px; object-fit:cover; visibility:hidden}
+#stage .lv{position:absolute; visibility:hidden; object-fit:fill}
+#flat{position:absolute; left:0; top:0; width:1920px; height:1080px; object-fit:fill; z-index:2; visibility:hidden}
+#stage .li{position:absolute; transform-origin:0 0; pointer-events:none}
+/* a large QR / thumbnail selected on the timeline: drag to move it, pull a corner to resize it (aspect kept) */
+/* sizes in screen pixels whatever the picture's scale: --u is one screen pixel on the 1920 frame */
+#placeBox{--u:1px; position:absolute; z-index:9000; border:calc(var(--u)*2.5) solid #0a84ff; border-radius:calc(var(--u)*4);
+  box-shadow:0 0 0 calc(var(--u)*1.5) rgba(255,255,255,.85), 0 calc(var(--u)*6) calc(var(--u)*24) rgba(0,0,0,.35); cursor:move; touch-action:none; display:none}
+#placeBox .ph{position:absolute; width:calc(var(--u)*22); height:calc(var(--u)*22); border-radius:50%; background:#fff; border:calc(var(--u)*3) solid #0a84ff;
+  box-shadow:0 calc(var(--u)*2) calc(var(--u)*8) rgba(0,0,0,.3)}
+#placeBox .ph[data-c=nw]{left:calc(var(--u)*-13); top:calc(var(--u)*-13); cursor:nwse-resize} #placeBox .ph[data-c=ne]{right:calc(var(--u)*-13); top:calc(var(--u)*-13); cursor:nesw-resize}
+#placeBox .ph[data-c=sw]{left:calc(var(--u)*-13); bottom:calc(var(--u)*-13); cursor:nesw-resize} #placeBox .ph[data-c=se]{right:calc(var(--u)*-13); bottom:calc(var(--u)*-13); cursor:nwse-resize}
+#placeBox .size{position:absolute; left:50%; top:calc(var(--u)*-34); transform:translateX(-50%); padding:calc(var(--u)*3) calc(var(--u)*9); border-radius:999px;
+  background:#0a84ff; color:#fff; font:700 calc(var(--u)*13) var(--mono); white-space:nowrap}
+#placeGuide{position:absolute; z-index:8999; background:#ff2d92; display:none; pointer-events:none}
+#stage .ring{position:absolute; border-radius:50%; pointer-events:none}
+/* captions retyped on this page: drawn as text until the next version bakes them */
+@font-face{font-family:"SusumeCap"; font-weight:900;
+  src:local("SourceHanSansJP-Heavy"),local("Source Han Sans JP Heavy"),local("SourceHanSans-Heavy"),local("Source Han Sans Heavy"),local("HiraginoSans-W8"),local("Hiragino Sans W8")}
+#stage .capfix{position:absolute; left:0; width:1920px; text-align:center; white-space:pre; pointer-events:none; display:none;
+  font-family:"SusumeCap","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; font-weight:900; font-size:90px; line-height:94px; letter-spacing:0; font-feature-settings:"palt"}
+#stage .capfix span{display:block}
+#stage .capfix .bk{color:transparent; -webkit-text-stroke:14px var(--o); text-shadow:0 0 8px var(--o), 0 0 20px var(--o)}
+#stage .capfix .fg{position:absolute; left:0; right:0; top:0; color:#fff}
+#stage .capfix.K{--o:#034857} #stage .capfix.S{--o:#646565} #stage .capfix.E{--o:#9a5800}
+.hudchip{position:absolute; z-index:100001; display:flex; align-items:center; gap:8px; padding:7px 13px; border-radius:99px; color:#fff; font-size:12.5px; font-weight:600;
+  background:rgba(28,28,30,.48); -webkit-backdrop-filter:blur(18px) saturate(160%); backdrop-filter:blur(18px) saturate(160%);
+  border:1px solid rgba(255,255,255,.16); box-shadow:0 8px 24px -8px rgba(0,0,0,.5); pointer-events:none; font-variant-numeric:tabular-nums}
+#hud{top:14px; left:50%; transform:translate(-50%,-8px) scale(.96); opacity:0; transition:opacity .25s, transform .35s var(--ease)}
+#hud.show{opacity:1; transform:translate(-50%,0) scale(1)}
+#busyChip{bottom:12px; right:12px; padding:5px 11px; font-size:11.5px; opacity:0; transform:translateY(6px); transition:opacity .25s, transform .35s var(--ease)}
+#busyChip.show{opacity:1; transform:none}
+/* the playing speed (C): shown only when it is not 1x */
+#rateChip{top:12px; right:12px; padding:4px 10px; font-size:11.5px; font-family:var(--mono); opacity:0; transform:translateY(-4px); transition:opacity .2s, transform .3s var(--ease)}
+#rateChip.show{opacity:1; transform:none}
+#busyChip i{width:7px; height:7px; border-radius:50%; background:#ff9f0a; box-shadow:0 0 0 3px rgba(255,159,10,.35); animation:pulse 1s ease-in-out infinite}
+#flash{position:absolute; z-index:100001; left:50%; top:50%; width:74px; height:74px; margin:-37px 0 0 -37px; border-radius:50%; display:grid; place-items:center;
+  background:rgba(28,28,30,.42); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); color:#fff; opacity:0; pointer-events:none}
+#flash svg{width:30px; height:30px}
+#flash.go{animation:flash .6s var(--ease-out)}
+
+/* transport */
+#transport{padding:12px 14px; display:flex; flex-direction:column; gap:10px; border-radius:var(--r-lg)}
+.trow{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+#bPlay{width:46px; height:46px; border-radius:50%; padding:0; flex:none}
+#bPlay svg{width:20px; height:20px; transition:transform .25s var(--ease)}
+#bPlay.pop svg{animation:pop .3s var(--ease)}
+.tcbox{display:flex; flex-direction:column; align-items:flex-start; line-height:1.15; min-width:150px; gap:3px}
+#tc{font:600 21px/1.1 var(--mono); letter-spacing:-.01em; font-variant-numeric:tabular-nums}
+#tcCopy{display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 9px 0 7px; border-radius:7px; border:1px solid rgba(60,60,67,.12);
+  background:rgba(255,255,255,.7); box-shadow:inset 0 1px 0 #fff; font-size:11px; font-weight:600; color:var(--text2); cursor:pointer;
+  transition:background-color .2s, color .2s, border-color .2s, transform .18s var(--ease)}
+#tcCopy:hover{background:#fff; color:var(--text)}
+#tcCopy:active{transform:scale(.94)}
+#tcCopy svg{width:12px; height:12px}
+#tcCopy.done{color:var(--ok); border-color:rgba(52,199,89,.4); background:rgba(52,199,89,.10)}
+#srcTc{font:11.5px/1.3 var(--mono); color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:280px}
+.divider{width:1px; align-self:stretch; background:var(--hairline); margin:0 2px}
+.trow.nav{border-top:1px solid var(--hairline); padding-top:10px; gap:8px}
+#capTime{display:flex; gap:6px; flex-wrap:wrap}
+#capTime .btn{flex:1 1 0; min-width:0}
+
+/* timelines */
+#timeline{padding:12px; border-radius:var(--r-lg); display:flex; flex-direction:column; gap:10px}
+canvas{display:block; width:100%; border-radius:12px; cursor:pointer; touch-action:none}
+#detail{height:176px; background:rgba(255,255,255,.72); box-shadow:inset 0 0 0 1px rgba(60,60,67,.07)}
+#detail.edge{cursor:ew-resize}
+#tlbar{display:flex; align-items:center; gap:8px 10px; flex-wrap:wrap; min-height:34px; padding:0 2px}
+#cutCard{display:flex; align-items:center; gap:6px 8px; flex-wrap:wrap; min-width:0; font-size:12px; color:var(--text2)}
+#cutCard .cl{font:600 12px/1.2 var(--mono); color:var(--text); font-variant-numeric:tabular-nums}
+#cutCard .gap{font-size:11.5px}
+#cutCard .grp{display:inline-flex; align-items:center; gap:3px; height:32px; padding:0 3px 0 9px; border-radius:11px; background:var(--fill2); border:1px solid rgba(60,60,67,.06)}
+#cutCard .grp > span{font-size:11.5px; color:var(--text2); margin-right:3px; white-space:nowrap}
+#cutCard .grp .btn{height:26px; padding:0 8px; font-size:11.5px; border-radius:8px}
+#cutCard .num{width:52px; height:26px; border-radius:8px; border:1px solid rgba(60,60,67,.16); background:#fff; padding:0 6px;
+  font:600 12px var(--mono); text-align:right; outline:none}
+#cutCard .num:focus{border-color:rgba(0,122,255,.55); box-shadow:0 0 0 3px rgba(0,122,255,.14)}
+.chk{display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 9px; border-radius:99px; font-size:11.5px; font-weight:600; white-space:nowrap}
+.chk::before{content:""; width:7px; height:7px; border-radius:50%; background:currentColor}
+.chk.ok{color:#1d8a3a; background:rgba(52,199,89,.12)} .chk.ng{color:#a1150c; background:rgba(255,59,48,.12); cursor:help}
+#selBar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 10px; border-radius:12px; background:var(--accent-soft); font-size:12.5px}
+#selBar b{font-weight:650} #selBar .cl{font:600 12px var(--mono); color:var(--accent)}
+#hist button{display:inline-flex; align-items:center; gap:4px}
+#hist svg{width:14px; height:14px}
+#hist button:disabled{opacity:.35; pointer-events:none}
+#stage .capimg{position:absolute; pointer-events:none; display:none}
+body.busy #cutCard .btn{opacity:.42; pointer-events:none}
+#zoom{display:inline-flex; align-items:center; gap:2px; padding:3px; border-radius:12px; background:var(--fill)}
+#zoom button{width:28px; height:26px; border:0; border-radius:9px; background:transparent; cursor:pointer; display:grid; place-items:center; color:var(--text);
+  transition:background-color .2s, transform .18s var(--ease)}
+#zoom button:hover{background:#fff; box-shadow:var(--shadow-sm)}
+#zoom button:active{transform:scale(.88)}
+#zoom button:disabled{opacity:.35; pointer-events:none}
+#zoom svg{width:14px; height:14px}
+#zoom span{font:600 11.5px var(--mono); color:var(--text2); min-width:5.4em; text-align:center; font-variant-numeric:tabular-nums; user-select:none}
+#ovWrap{position:relative}
+#overview{height:58px; background:rgba(255,255,255,.6); box-shadow:inset 0 0 0 1px rgba(60,60,67,.07)}
+#ovTip{position:absolute; top:-30px; transform:translateX(-50%); padding:3px 8px; border-radius:8px; font:600 11px/1.4 var(--mono); color:#fff;
+  background:rgba(28,28,30,.82); pointer-events:none; opacity:0; transition:opacity .15s; white-space:nowrap}
+#ovWrap:hover #ovTip{opacity:1}
+#noteFilter{margin:0 0 8px; align-self:flex-start}
+#legend{display:flex; gap:6px 14px; flex-wrap:wrap; color:var(--text2); font-size:11.5px; padding:0 4px}
+#legend i{display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:5px; vertical-align:-.5px}
+
+/* ------------------------------------------------ right panel */
+#right{position:sticky; top:calc(var(--header-h) + var(--gap)); height:calc(100vh - var(--header-h) - var(--gap) - 18px); min-height:520px;
+  display:flex; flex-direction:column; padding:12px; gap:12px; border-radius:var(--r-xl)}
+#composer{padding:12px; display:flex; flex-direction:column; gap:9px}
+.lbl{font-size:11.5px; font-weight:600; color:var(--text2); letter-spacing:.02em}
+#nowCap{display:flex; align-items:flex-start; gap:10px; min-height:46px}
+#nowCap .txt{flex:1; min-width:0}
+#nowCap .cap{font-size:14.5px; font-weight:500; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; transition:opacity .2s}
+#nowCap .meta{font-size:11.5px; color:var(--text2); font-variant-numeric:tabular-nums}
+#nowCap .none{font-size:12.5px; color:var(--text3)}
+#capFix{display:grid; grid-template-rows:0fr; transition:grid-template-rows .35s var(--ease), opacity .25s; opacity:0}
+#capFix.open{grid-template-rows:1fr; opacity:1}
+#capFix > div{overflow:hidden; min-height:0}
+#capFix .edbox{padding:2px 1px 3px}
+#nowCap .cap .tag,.crow .x .tag.fix{font-size:10.5px; font-weight:600; color:#7a5a00; background:rgba(255,204,0,.24); border-radius:5px; padding:1px 5px; margin-right:5px; vertical-align:1px}
+#nowCap .cap.del .tx{text-decoration:line-through; color:var(--text3)}
+.edbox{display:flex; flex-direction:column; gap:7px}
+.edbox .lbl b{font-weight:600; color:var(--text); font-family:var(--mono); font-size:11.5px}
+.edbox textarea.field{min-height:0; resize:none; font-size:14px; line-height:1.45; padding:8px 10px}
+.edbox .hint{font-size:11px; color:var(--text3)}
+.edbox .split{font-size:12px; color:var(--text2); line-height:1.5} .edbox .split b{color:var(--text); font-weight:600}
+.seg.spk button{height:26px; font-size:12px; padding:0 9px}
+.seg.spk button[data-s="K"].on{color:#0b6b7d} .seg.spk button[data-s="S"].on{color:#48484a}
+.field{width:100%; border-radius:12px; border:1px solid rgba(60,60,67,.14); background:rgba(255,255,255,.92); padding:9px 11px; outline:none;
+  transition:border-color .2s, box-shadow .2s, background-color .2s}
+.field:focus{border-color:rgba(0,122,255,.55); box-shadow:0 0 0 4px rgba(0,122,255,.14); background:#fff}
+textarea.field{resize:vertical; min-height:72px; line-height:1.5}
+.row{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+#range{font:12px/1.2 var(--mono); color:var(--text2); padding:6px 9px; border-radius:9px; background:var(--fill2); transition:background-color .25s, color .25s; font-variant-numeric:tabular-nums}
+#range.set{background:var(--accent-soft); color:var(--accent)}
+
+.tabs{position:relative; display:grid; grid-template-columns:1fr 1fr 1fr; padding:3px; background:var(--fill); border-radius:12px; flex:none}
+.tabs .ind{position:absolute; top:3px; bottom:3px; left:3px; width:calc((100% - 6px) / 3); border-radius:9px; background:#fff;
+  box-shadow:0 3px 8px -2px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.04); transition:transform .4s var(--ease)}
+.tabs[data-tab="notes"] .ind{transform:translateX(100%)}
+.tabs[data-tab="edits"] .ind{transform:translateX(200%)}
+.tabs button{position:relative; z-index:1; height:32px; border:0; background:transparent; font-size:13px; font-weight:600; cursor:pointer; border-radius:9px; color:var(--text2);
+  transition:color .25s, transform .18s var(--ease)}
+.tabs button.on{color:var(--text)}
+.tabs button:active{transform:scale(.96)}
+.count{display:inline-block; min-width:20px; padding:0 6px; margin-left:4px; border-radius:99px; font-size:11px; line-height:18px; background:var(--fill); color:var(--text2); font-variant-numeric:tabular-nums}
+.count.bump{animation:bump .45s var(--ease)}
+.panes{position:relative; flex:1; min-height:0}
+.pane{position:absolute; inset:0; display:flex; flex-direction:column; gap:8px}
+.pane[hidden]{display:none}
+
+#capSearch{height:34px; padding:0 11px 0 32px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:10px center; background-size:15px}
+.scroller{flex:1; min-height:0; overflow:auto; position:relative; overscroll-behavior:contain;
+  mask-image:linear-gradient(180deg, transparent 0, #000 8px, #000 calc(100% - 12px), transparent 100%)}
+#caps{padding:4px 2px 10px}
+.crow{display:grid; grid-template-columns:56px 8px 1fr; align-items:baseline; gap:8px; padding:7px 9px; border-radius:11px; cursor:pointer;
+  transition:background-color .25s, color .25s, transform .18s var(--ease), box-shadow .25s}
+.crow:hover{background:rgba(255,255,255,.75)}
+.crow:active{transform:scale(.985)}
+.crow .t{font:11.5px/1.4 var(--mono); color:var(--text3); font-variant-numeric:tabular-nums}
+.crow .d{width:8px; height:8px; border-radius:50%; align-self:center; background:var(--c-K)}
+.crow.S .d{background:var(--c-S)}
+.crow.E .d{background:var(--c-emphasis); border-radius:2px; transform:rotate(45deg) scale(.85)}
+.crow .x{font-size:13.5px; line-height:1.45; min-width:0; word-break:break-word}
+.crow.E .x{font-weight:650}
+.crow .x .tag{font-size:10.5px; font-weight:600; color:#b86e00; background:rgba(255,159,10,.14); border-radius:5px; padding:1px 5px; margin-right:5px; vertical-align:1px}
+.crow.has-note .t::after{content:""; display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--c-comment); margin-left:4px; vertical-align:1px}
+.crow.cur{background:#fff; box-shadow:0 4px 14px -6px rgba(0,60,140,.25), inset 0 0 0 1px rgba(0,122,255,.25)}
+.crow.cur .t{color:var(--accent)}
+.crow.del .x .tx{text-decoration:line-through; color:var(--text3)}
+.crow.del .d{opacity:.35}
+.crow .x .tx{white-space:pre-line}
+.crow.editing{background:#fff; cursor:default; box-shadow:0 6px 18px -8px rgba(0,60,140,.28), inset 0 0 0 1px rgba(0,122,255,.35)}
+.crow.editing:active{transform:none}
+.crow .redit{grid-column:1/-1; margin-top:4px}
+.empty{color:var(--text3); text-align:center; font-size:13px; padding:28px 10px}
+
+#list{padding:2px 2px 10px}
+.item{position:relative; margin:0 0 8px; padding:11px 12px 10px; border-radius:16px; background:rgba(255,255,255,.82); border:1px solid rgba(255,255,255,.95);
+  box-shadow:var(--shadow-sm); overflow:hidden; transition:opacity .3s, background-color .3s, box-shadow .3s}
+.item.done{opacity:.6}
+.item.flash{box-shadow:0 0 0 3px var(--accent-ring), var(--shadow-sm)}
+.item .head{display:flex; align-items:center; gap:8px}
+.check{width:20px; height:20px; flex:none; border-radius:50%; border:1.6px solid rgba(60,60,67,.32); background:#fff; cursor:pointer; display:grid; place-items:center; padding:0;
+  transition:background-color .25s, border-color .25s, transform .2s var(--ease)}
+.check:active{transform:scale(.85)}
+.check svg{width:12px; height:12px; color:#fff; opacity:0; transform:scale(.4); transition:opacity .2s, transform .3s var(--ease)}
+.item.done .check{background:var(--ok); border-color:var(--ok)}
+.item.done .check svg{opacity:1; transform:none}
+.it-tc{border:0; background:none; padding:0; font:600 12.5px/1.3 var(--mono); color:var(--accent); cursor:pointer; font-variant-numeric:tabular-nums}
+.it-tc:hover{text-decoration:underline}
+.it-tc.na{color:var(--text3); cursor:default; text-decoration:none}
+.tag2{font-size:11px; color:var(--text2); background:var(--fill2); border-radius:6px; padding:1px 6px}
+.carried{margin:0 0 12px; border-radius:16px; background:rgba(255,255,255,.6); border:1px solid rgba(255,255,255,.95); padding:2px 10px}
+.carried>summary{cursor:pointer; list-style:none; padding:10px 2px; font-size:13px; font-weight:600; display:flex; flex-wrap:wrap; gap:6px; align-items:center}
+.carried>summary::-webkit-details-marker{display:none}
+.carried .crow2{display:flex; gap:8px; align-items:baseline; padding:6px 2px; border-top:1px solid var(--fill2); font-size:12.5px}
+.carried .crow2 .t{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.tag2.ok{color:#1a7f37; background:rgba(26,127,55,.1)} .tag2.ng{color:#c4271d; background:rgba(196,39,29,.1)}
+.item .body{margin-top:6px; white-space:pre-wrap; word-break:break-word; font-size:13.5px; line-height:1.55}
+.item .ctx{margin-top:5px; font-size:12px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.item .fix{margin-top:6px; font-size:13px}
+.item .fix s{color:var(--text3)}
+.item .fix .br{color:var(--text3); margin:0 3px}
+.tag2.fix{color:#7a5a00; background:rgba(255,204,0,.22)}
+.tag2.cut{color:#a1150c; background:rgba(255,59,48,.12)}
+.tag2.warn{color:#8a5100; background:rgba(255,159,10,.16)}
+.tag2.gone{color:var(--text3)}
+.item.applied{opacity:.6}
+.item .reply{margin-top:8px; font-size:12.5px; color:#0b5b6b; background:rgba(48,176,199,.10); border-radius:10px; padding:7px 9px; white-space:pre-wrap}
+.item .tools{display:flex; gap:6px; margin-top:9px; opacity:.72; transition:opacity .2s}
+.item:hover .tools,.item:focus-within .tools{opacity:1}
+.item .edit textarea{margin-top:6px}
+
+#foot{flex:none; display:flex; align-items:center; gap:10px; padding:2px 2px 0}
+#countAll{font-size:12px; color:var(--text2); font-variant-numeric:tabular-nums}
+
+/* ------------------------------------------------ help popover */
+#help{position:fixed; z-index:200; top:calc(var(--header-h) + 8px); right:14px; width:440px; max-width:calc(100vw - 28px); max-height:calc(100vh - var(--header-h) - 24px); overflow:auto; padding:14px 16px 12px;
+  border-radius:var(--r-lg); opacity:0; transform:translateY(-8px) scale(.97); transform-origin:top right; pointer-events:none;
+  transition:opacity .22s, transform .35s var(--ease)}
+#help.open{opacity:1; transform:none; pointer-events:auto}
+#help h3{margin:0 0 8px; font-size:13px; font-weight:650}
+#help dl{display:grid; grid-template-columns:auto 1fr; gap:6px 12px; margin:0; align-items:center; font-size:12.5px}
+#help dt{white-space:nowrap} #help dd{margin:0; color:var(--text2)}
+#help .path{margin-top:10px; padding-top:8px; border-top:1px solid var(--hairline); font:11px/1.45 var(--mono); color:var(--text3); word-break:break-all}
+
+/* ------------------------------------------------ emphasis designs sheet */
+#stylesSheet{position:fixed; inset:0; z-index:400; background:rgba(28,28,30,.28); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  opacity:0; pointer-events:none; transition:opacity .35s var(--ease-out)}
+#stylesSheet.open{opacity:1; pointer-events:auto}
+#stylesSheet .frame{position:absolute; left:50%; top:max(10px, env(safe-area-inset-top)); bottom:0; width:min(1240px, 100vw); transform:translate(-50%, 100%);
+  border-radius:24px 24px 0 0; overflow:hidden; background:var(--bg); box-shadow:0 -20px 60px -20px rgba(0,0,0,.35); transition:transform .55s var(--ease)}
+#stylesSheet.open .frame{transform:translate(-50%, 0)}
+#stylesSheet iframe{width:100%; height:100%; border:0; display:block; background:var(--bg)}
+
+/* ------------------------------------------------ toast */
+.toast{position:fixed; z-index:300; left:50%; bottom:22px; transform:translate(-50%,16px) scale(.96); opacity:0; pointer-events:none;
+  padding:10px 16px; border-radius:99px; font-size:13px; font-weight:600; color:var(--text);
+  background:rgba(255,255,255,.78); -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
+  border:1px solid rgba(255,255,255,.9); box-shadow:0 14px 34px -12px rgba(30,41,70,.35); transition:opacity .25s, transform .4s var(--ease)}
+.toast.show{opacity:1; transform:translate(-50%,0) scale(1)}
+
+/* ------------------------------------------------ skeleton */
+#skeleton{position:fixed; inset:0; z-index:1000; overflow:hidden; background:inherit;
+  background:
+    radial-gradient(1100px 700px at 6% -8%, rgba(0,122,255,.13), transparent 62%),
+    radial-gradient(900px 640px at 104% 6%, rgba(175,82,222,.10), transparent 60%),
+    radial-gradient(1000px 760px at 46% 118%, rgba(48,176,199,.13), transparent 62%), var(--bg);
+  transition:opacity .55s var(--ease-out), transform .7s var(--ease)}
+#skeleton.out{opacity:0; transform:scale(1.015); pointer-events:none}
+.sk{border-radius:12px; background:linear-gradient(100deg, rgba(118,118,128,.10) 20%, rgba(118,118,128,.20) 40%, rgba(118,118,128,.10) 60%); background-size:300% 100%;
+  animation:shimmer 1.5s linear infinite}
+.sk.dark{background:linear-gradient(100deg, #1c1c1e 20%, #2c2c2e 40%, #1c1c1e 60%); background-size:300% 100%}
+.sk-head{height:var(--header-h); display:flex; align-items:center; gap:10px; padding:0 18px; border-bottom:1px solid rgba(60,60,67,.08); background:rgba(255,255,255,.5)}
+.sk-main{display:grid; grid-template-columns:minmax(0,1fr) 420px; gap:var(--gap); padding:var(--gap) 18px 18px}
+.sk-left{display:flex; flex-direction:column; gap:var(--gap)}
+.sk-stage{width:min(100%, calc(var(--stage-max-h) * 16 / 9)); aspect-ratio:16/9; margin:0 auto; border-radius:18px; position:relative; display:grid; place-items:center}
+.sk-stage span{color:rgba(255,255,255,.45); font-size:12.5px; letter-spacing:.04em}
+.sk-panel{padding:12px; border-radius:var(--r-lg); display:flex; flex-direction:column; gap:10px}
+.sk-right{height:calc(100vh - var(--header-h) - var(--gap) - 18px); min-height:520px; padding:12px; display:flex; flex-direction:column; gap:12px; border-radius:var(--r-xl)}
+#skErr{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); padding:16px 20px; border-radius:18px; max-width:min(520px, calc(100vw - 32px)); font-size:13.5px}
+
+/* ------------------------------------------------ keyframes */
+@keyframes shimmer{from{background-position:100% 0} to{background-position:0 0}}
+@keyframes pulse{0%,100%{opacity:1} 50%{opacity:.35}}
+@keyframes slideIn{from{opacity:0; transform:translateY(-6px) scale(.96)} to{opacity:1; transform:none}}
+@keyframes pop{0%{transform:scale(.6)} 60%{transform:scale(1.12)} 100%{transform:scale(1)}}
+@keyframes bump{0%{transform:scale(1)} 40%{transform:scale(1.3); background:var(--accent); color:#fff} 100%{transform:scale(1)}}
+@keyframes flash{0%{opacity:0; transform:scale(.7)} 25%{opacity:1; transform:scale(1)} 100%{opacity:0; transform:scale(1.25)}}
+
+/* ------------------------------------------------ parts put away (2026-10-21: the picture larger, the timeline always there) */
+:root.fold-header{--header-h:0px}
+:root.fold-header header{display:none}
+:root.fold-transport #transport{display:none}
+:root.fold-nav #transport .trow.nav{display:none}
+:root.fold-cut #cutCard, :root.fold-cut #selBar{display:none}
+:root.fold-ov #ovWrap, :root.fold-ov #legend{display:none}
+:root.fold-right main{grid-template-columns:minmax(0,1fr)}
+:root.fold-right #right{display:none}
+#foldBtn{position:fixed; right:14px; bottom:14px; z-index:300; width:38px; height:38px; border-radius:50%; border:0; cursor:pointer;
+  background:var(--glass-strong); box-shadow:0 6px 18px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06); color:var(--text); display:grid; place-items:center}
+#foldBtn svg{width:18px; height:18px}
+#foldMenu{position:fixed; right:14px; bottom:60px; z-index:300; padding:10px 12px; border-radius:14px; background:var(--glass-strong);
+  box-shadow:0 12px 30px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06); font-size:12.5px; display:none; min-width:220px}
+#foldMenu.open{display:block}
+#foldMenu h4{margin:0 0 6px; font-size:12px; color:var(--text2); font-weight:600}
+#foldMenu label{display:flex; align-items:center; gap:8px; padding:4px 2px; cursor:pointer; white-space:nowrap}
+#foldMenu .row{display:flex; gap:6px; margin-top:8px}
+#foldMenu .row button{flex:1}
+
+/* ------------------------------------------------ responsive */
+@media (max-width:1200px){ main,.sk-main{grid-template-columns:minmax(0,1fr) 360px} }
+@media (max-width:960px){
+  :root{--stage-max-h:100vh}
+  main,.sk-main{grid-template-columns:1fr; padding:12px}
+  #right,.sk-right{position:static; height:auto; min-height:0}
+  .panes{flex:none; height:62vh}
+  #srcTc{max-width:60vw}
+  header{padding:0 12px}
+  .sk-right{height:420px}
+}
+@media (max-width:560px){
+  #transport{padding:10px}
+  .tcbox{min-width:0; order:1; flex:1}
+  #bPlay{order:0}
+  #steps{order:2; width:100%}
+  #steps button{flex:1; padding:0 2px; font-size:12px}
+  #rate{order:3; width:100%}
+  #rate button{flex:1; padding:0 2px}
+  .trow > .grow{display:none}
+  #add{flex:1}
+  #tc{font-size:18px}
+  .trow.nav .navg{flex:1 1 calc(50% - 8px); justify-content:space-between}
+  #help{right:8px}
+}
+@media (pointer:coarse){
+  .btn{height:42px} .btn.sm{height:36px} .seg button{height:36px} .navg{height:44px} .navg button{width:40px; height:38px}
+  .tabs button{height:38px} .item .tools{opacity:1}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important; animation-iteration-count:1!important; transition-duration:.001ms!important; scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+<!-- ============================================================ skeleton -->
+<div id="skeleton" aria-hidden="true">
+  <div class="sk-head"><div class="sk" style="width:190px;height:16px"></div><div class="sk" style="width:86px;height:24px;border-radius:99px"></div><span class="grow"></span><div class="sk" style="width:110px;height:24px;border-radius:99px"></div><div class="sk" style="width:34px;height:34px;border-radius:10px"></div></div>
+  <div class="sk-main">
+    <div class="sk-left">
+      <div class="sk dark sk-stage"><span>読み込み中</span></div>
+      <div class="glass sk-panel"><div class="row" style="gap:10px"><div class="sk" style="width:46px;height:46px;border-radius:50%"></div><div class="sk" style="width:300px;height:34px"></div><div class="sk" style="width:150px;height:34px"></div></div><div class="row" style="gap:8px"><div class="sk" style="width:120px;height:34px"></div><div class="sk" style="width:120px;height:34px"></div><div class="sk" style="width:120px;height:34px"></div><div class="sk" style="width:120px;height:34px"></div></div></div>
+      <div class="glass sk-panel"><div class="sk" style="height:176px"></div><div class="sk" style="height:58px"></div><div class="sk" style="height:12px;width:60%"></div></div>
+    </div>
+    <div class="glass sk-right">
+      <div class="sk" style="height:190px;border-radius:20px"></div>
+      <div class="sk" style="height:38px"></div>
+      <div class="sk" style="height:34px"></div>
+      <div class="sk" style="height:44px"></div><div class="sk" style="height:44px;width:88%"></div><div class="sk" style="height:44px;width:94%"></div><div class="sk" style="height:44px;width:80%"></div>
+    </div>
+  </div>
+  <div id="skErr" class="glass" hidden></div>
+</div>
+
+<!-- ============================================================ header -->
+<button id="foldBtn" title="しまう・出す（H でタイムライン以外を全部しまう／戻す）" aria-label="しまう・出す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 15h18M8 4v11"/></svg></button>
+<div id="foldMenu" role="dialog" aria-label="しまう・出す">
+  <h4>しまう（チェックを外すと隠れる）</h4>
+  <label><input type="checkbox" data-fold="header" checked> 上のバー</label>
+  <label><input type="checkbox" data-fold="transport" checked> 再生の操作</label>
+  <label><input type="checkbox" data-fold="nav" checked> 字幕・カット・演出・指示へ移る</label>
+  <label><input type="checkbox" data-fold="cut" checked> カット点の情報</label>
+  <label><input type="checkbox" data-fold="ov" checked> 全体図と色の説明</label>
+  <label><input type="checkbox" data-fold="right" checked> 右の欄（字幕一覧・修正指示）</label>
+  <div class="row"><button class="btn sm" data-foldall="1">タイムライン以外をしまう</button><button class="btn sm" data-foldall="0">全部出す</button></div>
+</div>
+<header>
+  <h1 id="title">編集プレビュー</h1>
+  <span class="pill" id="ver">-</span>
+  <select id="verSel" title="プレビューの版" hidden></select>
+  <span class="grow"></span>
+  <button id="newVer" class="btn sm"></button>
+  <button class="btn sm" id="stylesOpen" title="強調デザインの一覧（採用・不採用を選ぶ）。この画面の上に開きます">強調デザイン</button>
+  <span class="pill" id="saveState"><span class="dot"></span><span class="st">保存済み</span></span>
+  <button class="btn icon" id="bHelp" title="キー操作（?）" aria-label="キー操作"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7.5 14h9"/></svg></button>
+</header>
+
+<div id="help" class="glass" role="dialog" aria-label="キー操作">
+  <h3>キー操作</h3>
+  <dl>
+    <dt><kbd>Space</kbd></dt><dd>再生 / 停止</dd>
+    <dt><kbd>K</kbd></dt><dd>停止</dd>
+    <dt><kbd>Z</kbd></dt><dd>再生に戻る</dd>
+    <dt><kbd>C</kbd></dt><dd>再生速度 1 → 1.5 → 2 倍（止めると 1 倍に戻る）</dd>
+    <dt><kbd>V</kbd></dt><dd>軽い再生（映像を1本の軽い動画で流す）の入り切り</dd>
+    <dt><kbd>H</kbd></dt><dd>タイムライン以外を全部しまう／戻す（右下のボタンで1つずつ選べる）</dd>
+    <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>1コマ戻る / 進む</dd>
+    <dt><kbd>⇧</kbd>+<kbd>←</kbd> <kbd>→</kbd></dt><dd>1秒戻る / 進む</dd>
+    <dt><kbd>J</kbd> <kbd>L</kbd></dt><dd>5秒戻る / 進む</dd>
+    <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>前 / 次の編集点（カット点と字幕の切れ目。止めて移動）</dd>
+    <dt><kbd>⇧</kbd>+<kbd>↑</kbd> <kbd>↓</kbd></dt><dd>前 / 次のカット点</dd>
+    <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>前 / 次の演出</dd>
+    <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>前 / 次の修正指示</dd>
+    <dt><kbd>A</kbd></dt><dd>前の編集点 〜 再生位置をカット</dd>
+    <dt><kbd>D</kbd></dt><dd>再生位置 〜 次の編集点をカット</dd>
+    <dt><kbd>I</kbd> <kbd>O</kbd></dt><dd>範囲の始め / 終わり</dd>
+    <dt><kbd>⌫</kbd></dt><dd>選んだ範囲（I / O）をカット</dd>
+    <dt><kbd>⌘</kbd>+<kbd>Z</kbd></dt><dd>元に戻す（⌘⇧Z でやり直す）</dd>
+    <dt><kbd>Q</kbd></dt><dd>字幕を外す（選んだ字幕、無ければ再生位置の字幕）。前の字幕が次まで伸びる</dd>
+    <dt><kbd>S</kbd></dt><dd>再生位置で字幕を2つに分ける（字幕一覧で分け目にカーソルを置いて Enter）</dd>
+    <dt><kbd>E</kbd>・ダブルクリック</dt><dd>字幕をその場で打ち直す（字幕一覧の行・時間軸の字幕）</dd>
+    <dt><kbd>⇧</kbd>+<kbd>A</kbd></dt><dd>字幕を足す（範囲があればその範囲）</dd>
+    <dt><kbd>Enter</kbd>・<kbd>⌘</kbd>+<kbd>Enter</kbd></dt><dd>打ち直しを確定（<kbd>⇧</kbd>+<kbd>Enter</kbd> で改行）</dd>
+    <dt><kbd>⇧</kbd>+<kbd>I</kbd></dt><dd>いまの字幕をここから出す</dd>
+    <dt><kbd>⇧</kbd>+<kbd>O</kbd></dt><dd>次の字幕をここから出す</dd>
+    <dt>字幕の端をドラッグ</dt><dd>字幕の出入りを動かす（時間軸の「字幕」の段）</dd>
+    <dt><kbd>⇧</kbd>+クリック</dt><dd>時間軸の字幕を選ぶ・外す（何も無い所からドラッグで囲んでも選べる）</dd>
+    <dt>演出の段で強調・大型QR</dt><dd>クリックで選ぶ・端をドラッグで出入り（⇧I / ⇧O も選んだものに効く）</dd>
+    <dt><kbd>X</kbd></dt><dd>修正指示を書く（止めて欄へ）</dd>
+    <dt><kbd>⌘</kbd>+<kbd>Enter</kbd></dt><dd>指示を追加して、再生に戻る</dd>
+    <dt><kbd>⇧</kbd>+<kbd>C</kbd></dt><dd>いまのタイムコードをコピー</dd>
+    <dt><kbd>−</kbd> <kbd>＋</kbd></dt><dd>時間軸を縮小 / 拡大（⌘+ホイールでも）</dd>
+    <dt><kbd>Esc</kbd></dt><dd>入力をやめる・選択を外す・閉じる</dd>
+  </dl>
+  <div class="path" id="path"></div>
+</div>
+
+<!-- ============================================================ main -->
+<main>
+  <div id="left">
+    <div id="stageWrap" title="クリックで再生 / 停止">
+      <div id="stage"><div id="base"></div></div>
+      <div id="hud" class="hudchip"></div>
+      <div id="busyChip" class="hudchip"><i></i><span>反映中</span></div>
+      <div id="rateChip" class="hudchip" aria-live="polite"></div>
+      <div id="flash"></div>
+    </div>
+
+    <div id="transport" class="glass">
+      <div class="trow">
+        <button id="bPlay" class="btn primary" title="再生 / 停止（Space）" aria-label="再生"></button>
+        <div class="seg" id="steps">
+          <button data-step="-5s" title="5秒戻る（J）">−5秒</button>
+          <button data-step="-1s" title="1秒戻る（⇧←）">−1秒</button>
+          <button data-step="-1" title="1コマ戻る（←）">−1コマ</button>
+          <button data-step="1" title="1コマ進む（→）">+1コマ</button>
+          <button data-step="1s" title="1秒進む（⇧→）">+1秒</button>
+          <button data-step="5s" title="5秒進む（L）">+5秒</button>
+        </div>
+        <div class="tcbox"><span id="tc">00:00:00:00</span>
+          <button id="tcCopy" title="いまのタイムコードをコピー（⇧C）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/></svg><span>コピー</span></button>
+          <span id="srcTc"></span></div>
+        <span class="grow"></span>
+        <div class="seg" id="hist" role="group" aria-label="元に戻す / やり直す">
+          <button id="bUndo" title="元に戻す（⌘Z）" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>戻す</button>
+          <button id="bRedo" title="やり直す（⌘⇧Z）" aria-label="やり直す" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+        </div>
+        <div class="seg" id="rate" title="再生速度（C で 1 → 1.5 → 2 倍。止めると 1 倍に戻る）">
+          <button data-r="0.5">0.5×</button><button data-r="1" class="on">1×</button><button data-r="1.25">1.25×</button><button data-r="1.5">1.5×</button><button data-r="2">2×</button>
+        </div>
+        <button class="btn sm" id="flatBtn" hidden title="映像を1本の軽い動画で流す（字幕・強調・大型QR・サムネはその上で直せる）。V で切り替え">軽い再生</button>
+      </div>
+      <div class="trow nav">
+        <div class="navg"><button data-nav="cap" data-d="-1" title="前の字幕" aria-label="前の字幕"></button><span>字幕</span><button data-nav="cap" data-d="1" title="次の字幕" aria-label="次の字幕"></button></div>
+        <div class="navg"><button data-nav="cut" data-d="-1" title="前のカット点（⇧↑）" aria-label="前のカット点"></button><span>カット</span><button data-nav="cut" data-d="1" title="次のカット点（⇧↓）" aria-label="次のカット点"></button></div>
+        <div class="navg"><button data-nav="mark" data-d="-1" title="前の演出（[）" aria-label="前の演出"></button><span>演出</span><button data-nav="mark" data-d="1" title="次の演出（]）" aria-label="次の演出"></button></div>
+        <div class="navg"><button data-nav="note" data-d="-1" title="前の修正指示（,）" aria-label="前の修正指示"></button><span>指示</span><button data-nav="note" data-d="1" title="次の修正指示（.）" aria-label="次の修正指示"></button></div>
+      </div>
+    </div>
+
+    <div id="timeline" class="glass">
+      <div id="tlbar">
+        <div id="cutCard"></div>
+        <span class="grow"></span>
+        <div id="zoom" role="group" aria-label="時間軸の幅">
+          <button id="zOut" title="縮小（−）" aria-label="縮小"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+          <span id="zLabel">前後 8秒</span>
+          <button id="zIn" title="拡大（＋）" aria-label="拡大"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+      </div>
+      <div id="selBar" hidden></div>
+      <canvas id="detail" title="クリックで移動・目盛りや字幕の上をドラッグで移動。何も無い所からドラッグで字幕を囲んで選ぶ（⇧クリックで足し外し、Q で外す）。字幕をダブルクリックで打ち直す。字幕・強調・大型QRの端をドラッグで出入りを動かす"></canvas>
+      <div id="ovWrap"><canvas id="overview" title="全体。クリック / ドラッグで移動"></canvas><div id="ovTip"></div></div>
+      <div id="legend">
+        <span><i style="background:var(--c-K)"></i><b data-spk="K" style="font-weight:inherit">本人</b></span>
+        <span><i style="background:var(--c-S)"></i><b data-spk="S" style="font-weight:inherit">相手</b></span>
+        <span><i style="background:var(--c-emphasis)"></i>強調</span>
+        <span><i style="background:var(--c-point)"></i>Point</span>
+        <span><i style="background:var(--c-screen)"></i>画面収録</span>
+        <span><i style="background:var(--c-qr)"></i>QR</span>
+        <span><i style="background:var(--c-cm)"></i>CM</span>
+        <span><i style="background:var(--c-separator)"></i>区切り</span>
+        <span><i style="background:var(--c-cut)"></i>カット点</span>
+        <span><i style="background:var(--c-comment)"></i>修正指示</span>
+        <span><i style="background:var(--c-edit)"></i>手直し</span>
+      </div>
+    </div>
+  </div>
+
+  <aside id="right" class="glass">
+    <section id="composer" class="card">
+      <div id="nowCap"><div class="txt"><div class="none">字幕なし</div></div><button class="btn sm" id="fixCap" title="この字幕をその場で打ち直す（E）" disabled>打ち直す</button><button class="btn sm" id="addCap" title="ここに字幕を足す（⇧A）">足す</button></div>
+      <div id="capTime">
+        <button class="btn sm" id="capFrom" title="いまの字幕の出だしをこの位置にする（⇧I）">この字幕をここから</button>
+        <button class="btn sm" id="nextFrom" title="次の字幕をこの位置から出す（⇧O）">次の字幕をここから</button>
+      </div>
+      <div id="capFix"><div id="capFixMount"></div></div>
+      <textarea id="note" class="field" placeholder="修正してほしいこと（X）　⌘Enter で追加して再生に戻る"></textarea>
+      <div class="row">
+        <span id="range">位置 00:00:00:00</span>
+        <button class="btn sm" id="setIn" title="範囲の始め（I）">始め</button>
+        <button class="btn sm" id="setOut" title="範囲の終わり（O）">終わり</button>
+        <button class="btn sm" id="clearRange" title="範囲を外していまの位置にする" hidden>解除</button>
+        <span class="grow"></span>
+        <button class="btn primary" id="add" title="追加（⌘Enter）">追加</button>
+      </div>
+    </section>
+
+    <div class="tabs" id="tabs" data-tab="caps" role="tablist">
+      <span class="ind"></span>
+      <button data-tab="caps" class="on" role="tab">字幕一覧</button>
+      <button data-tab="notes" role="tab">修正指示<span class="count" id="tabCount">0</span></button>
+      <button data-tab="edits" role="tab">手直し<span class="count" id="editCount">0</span></button>
+    </div>
+
+    <div class="panes">
+      <div class="pane" id="paneCaps">
+        <input type="search" class="field" id="capSearch" placeholder="字幕を検索">
+        <div class="scroller" id="capScroll"><div id="caps"></div></div>
+      </div>
+      <div class="pane" id="paneNotes" hidden>
+        <div class="seg" id="noteFilter" role="group" aria-label="表示する指示">
+          <button data-f="all" class="on">すべて</button><button data-f="open">未対応だけ</button>
+        </div>
+        <div class="scroller" id="listScroll"><div id="list"></div></div>
+      </div>
+      <div class="pane" id="paneEdits" hidden>
+        <div class="scroller" id="editScroll"><div id="edits"></div></div>
+      </div>
+    </div>
+
+    <div id="foot">
+      <span id="countAll">0件</span><span class="grow"></span>
+      <button id="copy" class="btn primary" title="未対応の指示をまとめてコピー">Claude に渡す文章をコピー</button>
+    </div>
+  </aside>
+</main>
+<div class="toast" id="toast"></div>
+<!-- the channel's emphasis designs, opened over this page (no new tab) -->
+<div id="stylesSheet" aria-hidden="true"><div class="frame"><iframe title="強調デザイン" loading="lazy"></iframe></div></div>
+
+<!-- MIRU: ai-video-editing-susume/assets/review/index.html を写し、サイトのつなぎを差し込んだもの（tools/sync-review.mjs）。直接直さない -->
+<script>window.MIRU_CLOUD=1;window.MIRU_READY=new Promise(function(r){window.__miruStart=r});</script>
+<script type="module" src="/src/review/cloud.ts"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const RM = matchMedia('(prefers-reduced-motion: reduce)');
+const ICON = {
+  play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11.04-6.86a1 1 0 0 0 0-1.72L9.5 4.28A1 1 0 0 0 8 5.14z"/></svg>',
+  pause:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4.2" height="15" rx="1.3"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.3"/></svg>',
+  left:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  right:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+};
+let M, FPS, audio, comments = {items: []}, rangeIn = null, rangeOut = null, fixingCapCandidate = null;
+// caption edits typed on this page (planning/caption-edits.json)
+let edits = {items: []}, editsOK = true, caps = [], capsVer = 0, hiddenL = new Set(), overlays = [], activeEditor = null;
+const layerByCap = new Map();
+const clips = [], vlayers = [], olayers = [], domLayers = new Map();
+let cutFrames = [], captionLayers = [], markStarts = [], capStarts = [];
+let ready = false, tlDirty = true, editingId = null, curTab = 'caps';
+// cuts restored / added on this page (planning/cut-edits.json): the server rebuilds the timeline
+let cuts = {items: []}, cutsOK = true, busy = false, playUntil = null;
+const SPANS = [1, 2, 4, 8, 15, 30], SPAN_MIN = 1, SPAN_MAX = 30;
+let spanS = (()=>{ try{ const v=+localStorage.getItem('review.span'); return v>=SPAN_MIN&&v<=SPAN_MAX?v:8; }catch{ return 8; } })();
+
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1900); }
+function hud(msg){ const h=$('#hud'); h.textContent=msg; h.classList.add('show'); clearTimeout(h._h); h._h=setTimeout(()=>h.classList.remove('show'),1100); }
+// ids for items made together in one step (the server refuses two items with the same id)
+let idSeq=0; const newId=p=>p+Date.now().toString(36)+(++idSeq).toString(36);
+function tc(f){ f=Math.max(0,Math.round(f)); const fr=Math.round(FPS); const s=Math.floor(f/FPS); const ff=f-Math.round(s*FPS);
+  const p=n=>String(n).padStart(2,'0'); return `${p(Math.floor(s/3600))}:${p(Math.floor(s/60)%60)}:${p(s%60)}:${p(Math.max(0,Math.min(fr-1,ff)))}`; }
+function shortTc(f){ const s=Math.floor(Math.max(0,f)/FPS); const p=n=>String(n).padStart(2,'0'); return (s>=3600?Math.floor(s/3600)+':':'')+`${p(Math.floor(s/60)%60)}:${p(s%60)}`; }
+function hms(sec){ const p=n=>String(n).padStart(2,'0'); const s=Math.floor(sec); return `${p(Math.floor(s/3600))}:${p(Math.floor(s/60)%60)}:${p(s%60)}.${String(Math.floor((sec-s)*10))}`; }
+function curve(item, field, f, def){
+  const base = item[field] ?? def; const keys = (item.keyframes||[]).filter(k=>field in k);
+  if(!keys.length || f < keys[0].frame) return base;
+  for(let i=0;i<keys.length-1;i++){ const a=keys[i], b=keys[i+1];
+    if(a.frame<=f && f<b.frame){ const it=a.interpolation||'linear'; if(it==='hold') return a[field];
+      let u=(f-a.frame)/(b.frame-a.frame); if(it==='smoothstep') u=u*u*(3-2*u); return a[field]+(b[field]-a[field])*u; } }
+  return keys[keys.length-1][field];
+}
+function bsearch(arr, f){ let lo=0, hi=arr.length-1, ans=-1; while(lo<=hi){ const m=(lo+hi)>>1; if(arr[m].start<=f){ans=m; lo=m+1;} else hi=m-1; } return ans; }
+function frameNow(){ return Math.min(M.frames-1, Math.max(0, Math.floor(audio.currentTime*FPS+1e-6))); }
+function seekFrame(f){ f=Math.max(0,Math.min(M.frames-1,Math.round(f))); playUntil=null;
+  audio.currentTime=(f+0.5)/FPS; render(true); }
+// media keys are renumbered for every preview: the URL carries the version so the browser never reuses another version's file
+// (quick mixes of an edited timeline also carry the cut revision)
+function mediaUrl(key){ return (window.MIRU_MEDIA||'/media/')+key+'?v='+encodeURIComponent((M.name||'')+'-'+(M.built_at||'')+(key[0]==='q'?'-'+(M.cut_rev||''):'')); }
+// a stored frame is used as is only on the very timeline it was made on; otherwise follow its source time
+function sameTimeline(it){ return it.preview===M.name && (it.cut_rev||'')===(M.cut_rev||''); }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function anim(el, frames, opts){ if(RM.matches || !el.animate) return null; return el.animate(frames, {duration:320, easing:'cubic-bezier(.32,.72,0,1)', ...opts}); }
+
+// ---------------------------------------------------------------- flat video (build_flat_preview.py; 2026-10-21)
+// One light stream holds every picture the page cannot change (the cut camera with its push-ins, screen recordings,
+// wipes, frames, headers…). Captions, the large QR and a past video's thumbnail stay live on top. Each clip of the
+// current timeline is mapped back to the flat video by source time; a clip it does not hold (a restored cut) is
+// drawn live from the proxies as before.
+let flatEl=null, flatOn=false;
+const isLive=L=>L.role==='caption' || L.role==='header' || L.role==='small_qr' || /^(qr-q|qrbg-|thumb)/.test(String(L.id||''));
+function setupFlat(){
+  const segs=(M.flat&&M.flat.segments)||[]; const by=new Map();
+  for(const g of segs){ if(!by.has(g.media)) by.set(g.media,[]); by.get(g.media).push(g); }
+  // the same source moment can appear twice (the avan, the end card): take the copy nearest on the timeline, and only
+  // within 2 minutes of where the clip now sits (a cut changed on the page moves the timeline by its length)
+  const moved=(M.retimed||[]).filter(r=>r.kind==='screen'||r.kind==='emphasis').map(r=>[Math.min(r.from[0],r.to[0]),Math.max(r.from[1],r.to[1])]);
+  for(const c of clips){ c.flatT=null; const d=(c.end-c.start)/FPS; let best=1e9;
+    if(moved.some(([x,y])=>c.start<y && x<c.end)) continue;      // drawn live: the flat video holds it where it was
+    for(const g of by.get(c.media)||[]){ const gd=(g.end-g.start)/FPS;
+      if(c.src>=g.src-0.5/FPS && c.src+d<=g.src+gd+0.5/FPS){ const at=g.start+(c.src-g.src)*FPS, dist=Math.abs(at-c.start);
+        if(dist<best && dist<=120*FPS){ best=dist; c.flatT=at/FPS; } } } }
+  const btn=$('#flatBtn'); if(!M.flat){ if(btn) btn.hidden=true; flatOn=false; if(flatEl) flatEl.style.visibility='hidden'; return; }
+  if(!flatEl){ flatEl=document.createElement('video'); flatEl.id='flat'; flatEl.muted=true; flatEl.playsInline=true; flatEl.preload='auto'; $('#stage').appendChild(flatEl); }
+  const url=mediaUrl(M.flat.media); if(!flatEl.src.endsWith(url)) flatEl.src=url;
+  let pref=null; try{ pref=localStorage.getItem('review-flat'); }catch{}
+  flatOn=pref!=='0'; if(btn){ btn.hidden=false; btn.classList.toggle('on',flatOn); btn.onclick=toggleFlat; }
+}
+function toggleFlat(){ if(!M.flat){ hud('この版には軽い再生の動画がありません'); return; } flatOn=!flatOn;
+  try{ localStorage.setItem('review-flat',flatOn?'1':'0'); }catch{}
+  $('#flatBtn').classList.toggle('on',flatOn); hud(flatOn?'軽い再生：入':'軽い再生：切（全部その場で重ねる）');
+  for(const [k,el] of domLayers){ el.remove(); } domLayers.clear(); for(const uid of [...assigned.keys()]) release(uid); render(true); }
+function syncFlat(c, f, playing){
+  const el=flatEl; el.style.visibility='visible'; el.playbackRate=audio.playbackRate;
+  if(playing){ const exp=c.flatT+(audio.currentTime*FPS-c.start)/FPS; if(el.paused) el.play().catch(()=>{});
+    if(!el.seeking && Math.abs(el.currentTime-exp)>0.12) el.currentTime=exp; }
+  else { if(!el.paused) el.pause(); const e2=c.flatT+(f+0.5-c.start)/FPS; if(!el.seeking && Math.abs(el.currentTime-e2)>0.4/FPS) el.currentTime=e2; }
+}
+
+// ---------------------------------------------------------------- video slots (engine)
+const slots = []; const assigned = new Map();
+function makeSlot(key, isBase){
+  const v=document.createElement('video'); v.muted=true; v.playsInline=true; v.preload='auto'; v.src=mediaUrl(key);
+  v.className = isBase ? '' : 'lv'; (isBase ? $('#base') : $('#stage')).appendChild(v);
+  const s={key,isBase,el:v,uid:null}; slots.push(s); return s;
+}
+function acquire(item){
+  let s = assigned.get(item.uid); if(s) return s;
+  s = slots.find(x=>!x.uid && x.key===item.media && x.isBase===item.isBase) || makeSlot(item.media, item.isBase);
+  s.uid=item.uid; assigned.set(item.uid,s); return s;
+}
+function release(uid){ const s=assigned.get(uid); if(!s) return; s.el.pause(); s.el.style.visibility='hidden'; s.uid=null; assigned.delete(uid); const r=domLayers.get('ring'+uid); if(r) r.style.display='none'; }
+
+function placeVideoLayer(item, s, f){
+  const L=item.layer, m=M.media[item.media]; const size=curve(L,'scale',f,1);
+  const w=(L.width||m.src_w)*size, h=(L.height||m.src_h)*size, x=curve(L,'x',f,0), y=curve(L,'y',f,0);
+  const crop=L.source_crop||{x:0,y:0,width:m.src_w,height:m.src_h};
+  const sc=Math.max(w/crop.width, h/crop.height); const ox=(crop.width*sc-w)/2, oy=(crop.height*sc-h)/2;
+  const el=s.el; el.style.width=(m.src_w*sc)+'px'; el.style.height=(m.src_h*sc)+'px';
+  const bx=crop.x*sc+ox, by=crop.y*sc+oy; el.style.left=(x-bx)+'px'; el.style.top=(y-by)+'px';
+  el.style.clipPath = L.mask==='circle' ? `circle(${w/2}px at ${bx+w/2}px ${by+h/2}px)` : `inset(${by}px ${m.src_w*sc-bx-w}px ${m.src_h*sc-by-h}px ${bx}px)`;
+  el.style.opacity=curve(L,'opacity',f,1); el.style.zIndex=10+L.i*2;
+  if(L.mask==='circle' && L.ring_width){ let r=domLayers.get('ring'+item.uid);
+    if(!r){ r=document.createElement('div'); r.className='ring'; $('#stage').appendChild(r); domLayers.set('ring'+item.uid,r); }
+    Object.assign(r.style,{display:'block',left:x+'px',top:y+'px',width:w+'px',height:h+'px',zIndex:10+L.i*2+1,boxShadow:`inset 0 0 0 ${L.ring_width}px ${L.ring_color||'#fff'}`}); }
+}
+
+// ---------------------------------------------------------------- overlay layers (engine)
+function ensureDom(L){
+  let el=domLayers.get(L.i); if(el) return el;
+  if(L.type==='image'){ el=new Image(); el.decoding='async'; el.src=mediaUrl(L.media); if(L.width) el.style.width=L.width+'px'; if(L.height) el.style.height=L.height+'px'; }
+  else { el=document.createElement('div'); el.style.width=L.width+'px'; el.style.height=L.height+'px'; el.style.background=L.color||'#fff'; }
+  el.className='li'; el.style.zIndex=10+L.i*2; el.style.display='none'; $('#stage').appendChild(el); domLayers.set(L.i,el); return el;
+}
+
+let lastF=-1;
+function render(force){
+  // the sound is waiting for data (readyState < 3): the pictures wait with it, so they never run ahead of the voice
+  const f=frameNow(); const playing=!audio.paused && !(audio.readyState<3);
+  // base clips: current + next ones within 1.5 s are kept ready
+  const ci=Math.max(0,bsearch(clips,f)); const need=new Map();
+  const useFlat=flatOn && flatEl && clips[ci].flatT!=null;
+  if(useFlat) syncFlat(clips[ci],f,playing); else if(flatEl){ flatEl.style.visibility='hidden'; if(!flatEl.paused) flatEl.pause(); }
+  if(!useFlat) need.set(clips[ci].uid,{it:clips[ci],active:true});
+  for(let k=ci+1;k<Math.min(clips.length,ci+3);k++) if(clips[k].start-f<=45 && !(flatOn && clips[k].flatT!=null)) need.set(clips[k].uid,{it:clips[k],active:false});
+  for(const it of vlayers){ if(useFlat && !isLive(it.layer)) continue;
+    if(it.start<=f && f<it.end) need.set(it.uid,{it,active:true}); else if(it.start>f && it.start-f<=45) need.set(it.uid,{it,active:false}); }
+  for(const uid of [...assigned.keys()]) if(!need.has(uid)) release(uid);
+  for(const {it,active} of need.values()){
+    const s=acquire(it); const el=s.el; el.playbackRate=audio.playbackRate;
+    const exp=it.src+((active?audio.currentTime*FPS:it.start)-it.start)/FPS;
+    if(!it.isBase){ placeVideoLayer(it,s,active?f:it.start); const ring=domLayers.get('ring'+it.uid); if(ring) ring.style.display=active?'block':'none'; }
+    if(active){ el.style.visibility='visible';
+      if(playing){ if(el.paused) el.play().catch(()=>{}); if(!el.seeking && Math.abs(el.currentTime-exp)>0.15) el.currentTime=exp; }
+      else { if(!el.paused) el.pause(); const e2=it.src+(f+0.5-it.start)/FPS; if(!el.seeking && Math.abs(el.currentTime-e2)>0.4/FPS) el.currentTime=e2; } }
+    else { el.style.visibility='hidden'; if(!el.paused) el.pause(); if(!el.seeking && Math.abs(el.currentTime-exp)>0.05) el.currentTime=exp; }
+  }
+  // camera transform on the base layer only
+  const cam=M.camera[Math.max(0,bsearch(M.camera,f))]; let tr='none';
+  if(cam && cam.start<=f && f<cam.end){ const s=curve(cam,'scale',f,1), cx=curve(cam,'cx',f,.5), cy=curve(cam,'cy',f,.5);
+    if(s!==1||cx!==.5||cy!==.5) tr=`translate(${M.width/2-s*M.width*cx}px,${M.height/2-s*M.height*cy}px) scale(${s})`; }
+  $('#base').style.transform=tr;
+  // still layers: create shortly before, remove shortly after
+  for(const L of olayers){
+    if(useFlat && !isLive(L)){ const el=domLayers.get(L.i); if(el) el.style.display='none'; continue; }
+    if(L.start-150<=f && f<L.end+30){ const el=ensureDom(L);
+      if(L.start<=f && f<L.end && !hiddenL.has(L.i)){ el.style.display='block'; el.style.left=curve(L,'x',f,0)+'px'; el.style.top=curve(L,'y',f,0)+'px';
+        el.style.opacity=curve(L,'opacity',f,1); const sc=curve(L,'scale',f,1); el.style.transform=sc===1?'':`scale(${sc})`; }
+      else el.style.display='none'; }
+    else if(domLayers.has(L.i)){ domLayers.get(L.i).remove(); domLayers.delete(L.i); }
+  }
+  for(const o of overlays){ const on=o.e.start<=f && f<o.e.end; if(o.on!==on){ o.on=on; o.el.style.display=on?'block':'none'; } }
+  updatePlaceBox();
+  if(f!==lastF || force){ lastF=f; UI.tc.textContent=tc(f);
+    const c=clips[ci]; UI.src.textContent=`${c.source_name}  ${hms(c.src+(f-c.start)/FPS)}`;
+    updateNowCap(f); updateTranscript(f); updateRange(f); renderCutCard(); tlDirty=true; }
+}
+let waitHud=0;
+function loop(){
+  if(playUntil!=null && !audio.paused && audio.currentTime*FPS >= playUntil){ playUntil=null; audio.pause(); }
+  if(!audio.paused && audio.readyState<3 && performance.now()-waitHud>1500){ waitHud=performance.now(); hud('音を読み込み中…'); }
+  render(false);
+  if(!audio.paused || tlDirty){ tlDirty=false; const p=precisePos(); drawDetail(p); drawOverview(p); }
+  requestAnimationFrame(loop);
+}
+// smooth playhead: extrapolate between coarse currentTime updates
+let rawCT=-1, rawAt=0;
+function precisePos(){ const ct=audio.currentTime, now=performance.now();
+  if(audio.paused || ct!==rawCT){ rawCT=ct; rawAt=now; return ct*FPS-0.5; }
+  return (ct+Math.min(0.12,(now-rawAt)/1000*audio.playbackRate))*FPS-0.5; }
+
+// ---------------------------------------------------------------- captions
+function captionsAt(f){ return caps.filter(L=>L.start<=f && f<L.end); }
+function currentCap(f){ const cs=captionsAt(f); return cs.filter(c=>c.caption_kind!=='emphasis').slice(-1)[0]||cs.slice(-1)[0]||null; }
+// 話し手の呼び名はプレビューの manifest.speakers から（無ければ 本人・相手）
+function spkName(s){ const mf=(typeof M!=='undefined'&&M)||{};
+  // speakers が無い前のプレビュー（すゝめの案件）は 河村さん と呼ぶ
+  const m=mf.speakers||(/ai-video-editing-susume/.test(mf.case||'')?{K:'河村さん'}:{}); return m[s]||(s==='S'?'相手':'本人'); }
+function capWho(L){ return L.caption_kind==='emphasis'?`強調${L.emphasis_role?'（'+L.emphasis_role+'）':''}`:spkName(L.speaker==='S'?'S':'K'); }
+let lastCapKey=null;
+function updateNowCap(f){
+  const L=currentCap(f); fixingCapCandidate=L;
+  const key=L?L.key+'|'+capsVer:null; if(key===lastCapKey) return; lastCapKey=key;
+  const box=$('#nowCap .txt');
+  box.innerHTML = L ? `<div class="cap${L.deleted?' del':''}">${capTag(L)}<span class="tx">${esc(L.text||'').replace(/\n/g,' ')}</span></div><div class="meta">${capWho(L)}・${tc(L.start)}〜${tc(L.end)}</div>`
+                    : '<div class="none">字幕なし</div>';
+  $('#fixCap').disabled=!L;
+}
+function capTag(e){ if(e.deleted) return '<span class="tag fix" title="この字幕は出さない（次の版にも使う）">出さない</span>';
+  if(e.add) return '<span class="tag fix" title="この画面で足した字幕（仮表示・次の版にも使う）">手直し・追加</span>';
+  if(e.edit) return '<span class="tag fix" title="この画面で打ち直した字幕（仮表示・次の版にも使う）">手直し</span>';
+  if(e.time) return '<span class="tag fix" title="この画面で出入りを動かした字幕">出入り</span>'; return ''; }
+
+// transcript list
+let capRows=[], activeRows=new Set(), userScrollAt=0, lastAnchor=-1;
+function renderTranscript(){
+  const box=$('#caps'); const html=[];
+  caps.forEach((L,k)=>{ const e=L.caption_kind==='emphasis'; const cls='crow '+(e?'E':(L.speaker==='S'?'S':'K'))+(L.deleted?' del':'');
+    html.push(`<div class="${cls}" data-k="${k}" title="${tc(L.start)}　ダブルクリックで打ち直す"><span class="t">${shortTc(L.start)}</span><span class="d"></span><span class="x">${e?'<span class="tag">強調</span>':''}${capTag(L)}<span class="tx">${esc(L.text||'')}</span></span></div>`); });
+  box.innerHTML=html.join('') || '<div class="empty">字幕がありません</div>';
+  capRows=caps.length?[...box.children]:[]; activeRows=new Set(); lastAnchor=-1;
+  filterTranscript();
+}
+function filterTranscript(){ const q=$('#capSearch').value.trim().toLowerCase(); if(!q && !capRows.some(r=>r.hidden)) return; let n=0;
+  capRows.forEach((r,k)=>{ const c=caps[k]; const hit=!q || (c.text||'').toLowerCase().includes(q) || (c.origText||'').toLowerCase().includes(q); r.hidden=!hit; if(hit) n++; });
+  let em=$('#caps .empty'); if(!n && !em){ em=document.createElement('div'); em.className='empty'; em.textContent='見つかりません'; $('#caps').appendChild(em); } else if(n && em) em.remove(); }
+function buildTranscript(){
+  const box=$('#caps'); renderTranscript();
+  box.addEventListener('click',e=>{ if(e.target.closest('.redit')) return; const r=e.target.closest('.crow'); if(!r) return; seekFrame(caps[+r.dataset.k].start); });
+  box.addEventListener('dblclick',e=>{ if(e.target.closest('.redit')) return; const r=e.target.closest('.crow'); if(!r) return; e.preventDefault(); getSelection()?.removeAllRanges();
+    openEditor(caps[+r.dataset.k],'edit',r); });
+  const sc=$('#capScroll'); ['wheel','touchmove','pointerdown'].forEach(t=>sc.addEventListener(t,()=>{ userScrollAt=performance.now(); },{passive:true}));
+  $('#capSearch').addEventListener('input',filterTranscript);
+}
+function updateTranscript(f){
+  if(!capRows.length) return;
+  const now=new Set(); let i=bsearch(caps,f);
+  for(let k=i; k>=0 && k>i-12; k--){ const L=caps[k]; if(L.start<=f && f<L.end) now.add(k); }
+  let same=now.size===activeRows.size; if(same) for(const k of now) if(!activeRows.has(k)){ same=false; break; }
+  if(!same){
+    for(const k of activeRows) if(!now.has(k)) capRows[k].classList.remove('cur');
+    for(const k of now) capRows[k].classList.add('cur');
+    activeRows=now; }
+  // follow the current caption, or the next one when none is showing
+  const anchor=now.size?Math.min(...now):Math.min(capRows.length-1,i+1);
+  if(anchor===lastAnchor) return; lastAnchor=anchor;
+  if(curTab==='caps' && !$('#capSearch').value && !(activeEditor && activeEditor.row) && performance.now()-userScrollAt>2500){
+    const row=capRows[anchor], sc=$('#capScroll');
+    const top=row.offsetTop - sc.clientHeight*0.32;
+    smoothScroll(sc, top);
+  }
+}
+function smoothScroll(sc, top){ top=Math.max(0,top); const d=Math.abs(sc.scrollTop-top); if(d<4) return;
+  sc.scrollTo({top, behavior: (RM.matches || d>sc.clientHeight*1.5) ? 'instant' : 'smooth'}); }
+function markNotedCaptions(){
+  if(!capRows.length) return; const fs=comments.items.map(commentFrame).filter(x=>x!=null);
+  caps.forEach((L,k)=>{ const has=L.caption_kind!=='emphasis' && fs.some(fr=>L.start<=fr && fr<L.end); capRows[k].classList.toggle('has-note',has); });
+}
+
+// ---------------------------------------------------------------- timelines
+const COL={emphasis:'c-emphasis',point:'c-point',screen:'c-screen',qr:'c-qr',large_qr:'c-qr',cm:'c-cm',separator:'c-separator',end_card:'c-cm',thumbnail:'c-qr'};
+const PAL={};
+function loadPalette(){ const cs=getComputedStyle(document.documentElement);
+  for(const n of ['c-K','c-S','c-emphasis','c-point','c-screen','c-qr','c-cm','c-separator','c-cut','c-comment','c-edit','done','accent','text','text2','text3']) PAL[n]=cs.getPropertyValue('--'+n).trim(); }
+function fitCanvas(c){ const r=c.getBoundingClientRect(); const d=window.devicePixelRatio||1; const w=Math.max(1,Math.round(r.width*d)), h=Math.max(1,Math.round(r.height*d));
+  if(c.width!==w||c.height!==h){ c.width=w; c.height=h; } const g=c.getContext('2d'); g.setTransform(d,0,0,d,0,0); return {g,W:r.width,H:r.height}; }
+function rr(g,x,y,w,h,r){ if(w<=0) return; r=Math.min(r,w/2,h/2); g.beginPath(); if(g.roundRect) g.roundRect(x,y,w,h,r); else g.rect(x,y,w,h); g.fill(); }
+function clipText(g,txt,x0,x1,y,color){ if(x1-x0<14) return; g.save(); g.beginPath(); g.rect(x0,y-10,x1-x0,20); g.clip(); g.fillStyle=color; g.fillText(txt,Math.max(x0+6, 6),y); g.restore(); }
+const LANES={ruler:[0,18], marks:[22,44], caps:[49,79], wave:[83,115], cuts:[119,131], notes:[136,158]};
+let capDrag=null;   // {b0, b, left:[caps], right:[caps]} while an edge is dragged
+let selCaps=new Set(), capBox=null;   // captions picked on the timeline (cap keys); the box dragged from an empty spot
+function capSpan(L){ if(capDrag){ if(capDrag.left.includes(L)) return [L.start,capDrag.b]; if(capDrag.right.includes(L)) return [capDrag.b,L.end]; } return [L.start,L.end]; }
+function tickStep(){ const want=spanS*2/7; for(const st of [0.2,0.5,1,2,5,10,15,30]) if(st>=want) return st; return 30; }
+// ---------------------------------------------------------------- waveform (build_review_preview.py: 0..255 = -60..0 dB, 100 per second)
+// drawn through the clips by source time, so it follows cuts changed on the page
+const waveData=new Map();
+function waveOf(mediaKey){ const k=M.waves&&M.waves[mediaKey]; if(!k) return null; let w=waveData.get(k);
+  if(w===undefined){ waveData.set(k,null); fetch(mediaUrl(k)).then(r=>r.ok?r.arrayBuffer():null).then(b=>{ if(b){ const w=new Uint8Array(b);
+    // the room's noise floor (the 25th percentile of a sample) is drawn flat, so the gaps between words stand out
+    const smp=[]; for(let i=0;i<w.length;i+=Math.max(1,Math.floor(w.length/4000))) smp.push(w[i]); smp.sort((p,q)=>p-q);
+    w.floor=smp[Math.floor(smp.length*.25)]||0; waveData.set(k,w); tlDirty=true; } }).catch(()=>{}); return null; }
+  return w; }
+function drawWave(g,a,b,x,W){
+  const [y0,y1]=LANES.wave, mid=(y0+y1)/2, half=(y1-y0)/2-2, R=M.wave_rate||100;
+  g.fillStyle='rgba(118,118,128,.055)'; rr(g,4,y0,W-8,y1-y0,8);
+  if(!M.waves) return;
+  const fpp=(b-a)/W; g.fillStyle='rgba(72,72,80,.55)';
+  let ci=Math.max(0,bsearch(clips,Math.max(0,a)));
+  for(let px=0; px<W; px++){ const f0=a+px*fpp, f1=f0+fpp; if(f1<0||f0>=M.frames) continue;
+    while(ci<clips.length-1 && clips[ci].end<=f0) ci++;
+    let peak=0, floor=0;
+    for(let k=ci; k<clips.length && clips[k].start<f1; k++){ const c=clips[k], w=waveOf(c.media); if(!w) continue;
+      const s0=c.src+(Math.max(f0,c.start)-c.start)/FPS, s1=c.src+(Math.min(f1,c.end)-c.start)/FPS;
+      floor=w.floor||0;
+      for(let i=Math.floor(s0*R), e=Math.max(i+1,Math.ceil(s1*R)); i<e && i<w.length; i++) if(i>=0 && w[i]>peak) peak=w[i]; }
+    const u=Math.max(0,(peak-floor)/Math.max(1,255-floor));
+    if(peak>0){ const h=Math.max(.5,Math.pow(u,1.4)*half); g.fillRect(px,mid-h,1,h*2); } } }
+function drawDetail(pos){
+  const c=$('#detail'); const {g,W,H}=fitCanvas(c); g.clearRect(0,0,W,H);
+  const span=spanS*FPS, a=pos-span, b=pos+span, x=fr=>(fr-a)/(b-a)*W;
+  g.font='500 11px -apple-system,"Hiragino Sans",sans-serif'; g.textBaseline='middle';
+  // lane backgrounds
+  g.fillStyle='rgba(118,118,128,.055)'; for(const k of ['marks','caps','notes']){ const [y0,y1]=LANES[k]; rr(g,4,y0,W-8,y1-y0,8); }
+  // range (I / O)
+  if(rangeIn!=null){ const r1=rangeOut!=null?rangeOut:Math.max(rangeIn+1,Math.round(pos)); g.fillStyle='rgba(0,122,255,.08)'; g.fillRect(x(rangeIn),18,x(r1)-x(rangeIn),H-18);
+    g.fillStyle='rgba(0,122,255,.5)'; g.fillRect(x(rangeIn),18,1.5,H-18); if(rangeOut!=null) g.fillRect(x(rangeOut)-1.5,18,1.5,H-18); }
+  // ruler: labels every tickStep seconds, small ticks between (frames when zoomed in)
+  g.fillStyle=PAL.text3; g.font='500 10px ui-monospace,Menlo,monospace'; g.textAlign='center';
+  { const st=tickStep(), minor=st<=0.5?1/FPS*5:st/5;
+    for(let t=Math.ceil(a/FPS/minor)*minor; t<=b/FPS; t+=minor){ const xx=x(t*FPS); g.globalAlpha=.3; g.fillRect(xx-.5,14,1,4); }
+    for(let t=Math.ceil(a/FPS/st)*st; t<=b/FPS+1e-9; t+=st){ if(t<0) continue; const xx=x(t*FPS); g.globalAlpha=.7; g.fillRect(xx-.5,11,1,7);
+      g.globalAlpha=.85; g.fillText(st<1?tc(Math.round(t*FPS)).slice(3):shortTc(t*FPS),xx,6); } }
+  g.globalAlpha=1; g.textAlign='left'; g.font='600 11px -apple-system,"Hiragino Sans",sans-serif';
+  // marks
+  { const [y0,y1]=LANES.marks; for(const m of M.marks){ const [ms,me]=markSpan(m); if(me<a||ms>b) continue; const x0=x(ms), x1=x(me);
+    g.fillStyle=PAL[COL[m.kind]]||PAL.text3; rr(g,x0,y0+2,x1-x0,y1-y0-4,6);
+    clipText(g,(m.label||m.kind).replace(/\n/g,' '),x0,x1-3,(y0+y1)/2,(m.kind==='emphasis'||m.kind==='separator')?'#3a2500':'#fff');
+    if(sel && markIs(m,sel)){ g.save(); g.strokeStyle=PAL.accent; g.lineWidth=2.5; g.beginPath(); if(g.roundRect) g.roundRect(x0-1,y0+1,x1-x0+2,y1-y0-2,7); else g.rect(x0-1,y0+1,x1-x0+2,y1-y0-2); g.stroke(); g.restore(); } } }
+  // captions
+  { const [y0,y1]=LANES.caps; g.font='500 12px -apple-system,"Hiragino Sans",sans-serif';
+    // captions taken off (Q / 出さない) leave the timeline; the picked ones (⇧click / box) are blue
+    for(const L of caps){ const [cs,ce]=capSpan(L); if(ce<a||cs>b||L.caption_kind==='emphasis'||L.deleted) continue; const x0=x(cs)+1, x1=x(ce)-1; const S=L.speaker==='S', on=selCaps.has(L.key);
+      g.fillStyle=on?PAL.accent:(S?PAL['c-S']:PAL['c-K']); rr(g,x0,y0+2,x1-x0,y1-y0-4,7);
+      if(on){ g.save(); g.strokeStyle='rgba(0,40,110,.85)'; g.lineWidth=2; g.beginPath(); const w=Math.max(0,x1-x0-2), h=y1-y0-6;
+        if(g.roundRect) g.roundRect(x0+1,y0+3,w,h,6); else g.rect(x0+1,y0+3,w,h); g.stroke(); g.restore(); }
+      clipText(g,(L.text||'').replace(/\n/g,' '),x0,x1-3,(y0+y1)/2,on?'#fff':(S?'#1d1d1f':'#fff'));
+      if(L.edit||L.add||L.time){ g.fillStyle=PAL['c-edit']; rr(g,x0+2,y0+2,Math.max(0,x1-x0-4),3.5,1.75); } }
+    if(capDrag){ g.fillStyle=PAL.accent; g.fillRect(x(capDrag.b)-1,y0-2,2,y1-y0+4);
+      g.font='600 10.5px ui-monospace,Menlo,monospace'; g.textAlign='center'; g.fillText(tc(capDrag.b),Math.max(36,Math.min(W-36,x(capDrag.b))),y0-6); g.textAlign='left'; } }
+  // the sound
+  drawWave(g,a,b,x,W);
+  // cut points
+  { const [y0,y1]=LANES.cuts; g.fillStyle=PAL['c-cut'];
+    for(const cf of cutFrames){ if(cf<a||cf>b) continue; const xx=x(cf); g.globalAlpha=.35; g.fillRect(xx-.5,LANES.caps[0],1,y1-LANES.caps[0]); g.globalAlpha=1;
+      g.beginPath(); g.moveTo(xx-5,y0+1); g.lineTo(xx+5,y0+1); g.lineTo(xx,y1-1); g.closePath(); g.fill(); } }
+  // notes
+  { const [y0,y1]=LANES.notes; g.font='600 11px -apple-system,"Hiragino Sans",sans-serif';
+    const vis=[];
+    for(const it of comments.items){ const fr=commentFrame(it); if(fr==null) continue; const e=it.end_frame&&it.preview===M.name?it.end_frame:fr+1;
+      if(e<a||fr>b) continue; vis.push({it,x0:x(fr),x1:x(e)}); }
+    vis.sort((p,q)=>p.x0-q.x0);
+    vis.forEach((v,k)=>{ const done=v.it.status==='done'; g.fillStyle=done?PAL.done:PAL['c-comment'];
+      g.globalAlpha=.16; rr(g,v.x0,y0+2,Math.max(v.x1-v.x0,6),y1-y0-4,6); g.globalAlpha=1; g.fillRect(v.x0,y0+2,3,y1-y0-4);
+      const lim=Math.min(v.x0+300, k+1<vis.length?vis[k+1].x0-4:W);
+      clipText(g,(v.it.replacement!=null?'字幕 → '+v.it.replacement:(v.it.text||'')).replace(/\s+/g,' '),v.x0+2,lim,(y0+y1)/2,done?PAL.text3:PAL.text); }); }
+  // lane labels
+  g.font='600 10px -apple-system,"Hiragino Sans",sans-serif';
+  for(const [k,label] of [['marks','演出'],['caps','字幕'],['wave','音'],['cuts','カット'],['notes','指示']]){ const [y0,y1]=LANES[k]; const w=g.measureText(label).width+10;
+    g.fillStyle='rgba(255,255,255,.88)'; rr(g,6,(y0+y1)/2-8,w,16,5); g.fillStyle=PAL.text2; g.fillText(label,11,(y0+y1)/2+.5); }
+  // the box being dragged around captions
+  if(capBox && capBox.moved){ const xa=x(Math.min(capBox.f0,capBox.f1)), xb=x(Math.max(capBox.f0,capBox.f1)), ya=Math.min(capBox.y0,capBox.y1), yb=Math.max(capBox.y0,capBox.y1);
+    g.fillStyle='rgba(0,122,255,.10)'; g.fillRect(xa,ya,xb-xa,yb-ya); g.save(); g.strokeStyle='rgba(0,122,255,.85)'; g.lineWidth=1; g.setLineDash([4,3]);
+    g.strokeRect(xa+.5,ya+.5,Math.max(0,xb-xa-1),Math.max(0,yb-ya-1)); g.restore(); }
+  // edge fade
+  const fl=g.createLinearGradient(0,0,28,0); fl.addColorStop(0,'rgba(255,255,255,.9)'); fl.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=fl; g.fillRect(0,18,28,H-18);
+  const frr=g.createLinearGradient(W-28,0,W,0); frr.addColorStop(0,'rgba(255,255,255,0)'); frr.addColorStop(1,'rgba(255,255,255,.9)'); g.fillStyle=frr; g.fillRect(W-28,18,28,H-18);
+  // playhead
+  const px=W/2; g.fillStyle=PAL.accent; g.fillRect(px-1,4,2,H-4);
+  g.beginPath(); g.moveTo(px-6,0); g.lineTo(px+6,0); g.lineTo(px+6,4); g.lineTo(px,10); g.lineTo(px-6,4); g.closePath(); g.fill();
+}
+function drawOverview(pos){
+  const c=$('#overview'); const {g,W,H}=fitCanvas(c); g.clearRect(0,0,W,H);
+  const pad=8, x=fr=>pad+fr/M.frames*(W-pad*2);
+  g.fillStyle='rgba(118,118,128,.07)'; rr(g,pad-2,7,W-pad*2+4,14,5); rr(g,pad-2,24,W-pad*2+4,12,5);
+  for(const m of M.marks){ g.fillStyle=PAL[COL[m.kind]]||PAL.text3; const em=m.kind==='emphasis'; const y=em?9:26, h=em?10:8; rr(g,x(m.start),y,Math.max(2,x(m.end)-x(m.start)),h,2); }
+  g.fillStyle=PAL['c-edit']; for(const e of caps){ if(e.edit||e.add||e.time) rr(g,x(e.start)-1,42,2.5,9,1.2); }
+  g.fillStyle=PAL['c-cut']; for(const it of cuts.items){ const fr=cutItemFrame(it); if(fr!=null && it.preview===M.name) rr(g,x(fr)-1,42,2.5,9,1.2); }
+  for(const it of comments.items){ const fr=commentFrame(it); if(fr==null) continue; g.fillStyle=it.status==='done'?PAL.done:PAL['c-comment']; rr(g,x(fr)-1.5,40,3,11,1.5); }
+  // progress
+  g.fillStyle='rgba(118,118,128,.14)'; rr(g,pad,H-4,W-pad*2,3,1.5); g.fillStyle=PAL.accent; rr(g,pad,H-4,Math.max(0,x(pos)-pad),3,1.5);
+  const px=x(pos); g.fillStyle=PAL.accent; g.fillRect(px-1,2,2,H-6);
+  g.beginPath(); g.arc(px,4,4,0,Math.PI*2); g.fill(); g.fillStyle='#fff'; g.beginPath(); g.arc(px,4,1.6,0,Math.PI*2); g.fill();
+}
+function setupCanvasInput(){
+  const ov=$('#overview'), tip=$('#ovTip'); const pad=8;
+  const ovFrame=ev=>{ const r=ov.getBoundingClientRect(); return Math.max(0,Math.min(1,(ev.clientX-r.left-pad)/(r.width-pad*2)))*M.frames; };
+  let drag=false;
+  ov.addEventListener('pointerdown',e=>{ drag=true; ov.setPointerCapture(e.pointerId); seekFrame(ovFrame(e)); });
+  ov.addEventListener('pointermove',e=>{ const r=ov.getBoundingClientRect(); const fr=ovFrame(e); tip.textContent=tc(fr); tip.style.left=Math.max(40,Math.min(r.width-40,e.clientX-r.left))+'px';
+    if(drag) seekFrame(fr); });
+  ov.addEventListener('pointerup',()=>drag=false); ov.addEventListener('pointercancel',()=>drag=false);
+  const dt=$('#detail'); let st=null;
+  const frameAt=(e,base)=>{ const r=dt.getBoundingClientRect(); return base+((e.clientX-r.left)/r.width-.5)*spanS*2*FPS; };
+  dt.addEventListener('pointerdown',e=>{ dt.setPointerCapture(e.pointerId);
+    // ⇧+click on a caption: add it to the picked ones, or take it out again
+    if(e.shiftKey){ const L=capAt(e); if(L){ toggleCapSel(L); st=null; return; } }
+    const me=markEdgeAt(e); if(me){ audio.pause(); sel=me.t; renderSelBar(); markDrag={...me, f:me.f0, pos:precisePos()}; tlDirty=true; return; }
+    const edge=edgeAt(e); if(edge){ audio.pause(); capDrag={...edge, b:edge.b0, pos:precisePos()}; tlDirty=true; return; }
+    if(inMarksLane(e)){ const t=markAt(e); if((t&&t.id)!==(sel&&sel.id)){ sel=t; renderSelBar(); tlDirty=true; } }
+    // from an empty spot (not the ruler, a caption or an emphasis / QR): a box around the captions picks them
+    const y=e.clientY-dt.getBoundingClientRect().top;
+    if(y>LANES.ruler[1] && !capAt(e) && !(inMarksLane(e) && markAt(e))){ const f=frameAt(e,precisePos());
+      capBox={x0:e.clientX, f0:f, f1:f, y0:y, y1:y, add:e.shiftKey, base:new Set(selCaps), moved:false, fn:frameNow()}; return; }
+    st={x:e.clientX, f:frameNow(), moved:false, shift:e.shiftKey}; });
+  dt.addEventListener('pointermove',e=>{
+    if(markDrag){ markDrag.f=snapMark(Math.round(frameAt(e,markDrag.pos+0.5)),markDrag); tlDirty=true; return; }
+    if(capDrag){ capDrag.b=snapEdge(Math.round(frameAt(e,capDrag.pos+0.5)),capDrag); tlDirty=true; return; }
+    if(capBox){ const d=capBox; d.f1=frameAt(e,precisePos()); d.y1=e.clientY-dt.getBoundingClientRect().top; if(Math.abs(e.clientX-d.x0)>3) d.moved=true;
+      if(d.moved) boxSelect(); tlDirty=true; return; }
+    if(!st){ dt.classList.toggle('edge',!!(edgeAt(e)||markEdgeAt(e))); return; }
+    const r=dt.getBoundingClientRect(); const dx=e.clientX-st.x; if(Math.abs(dx)>3) st.moved=true;
+    if(st.moved) seekFrame(st.f - dx/r.width*spanS*2*FPS); });
+  dt.addEventListener('pointerup',e=>{
+    if(markDrag){ const d=markDrag; markDrag=null; tlDirty=true; if(d.f!==d.f0){ const [s0,e0]=targetSpan(d.t); retime(d.t, d.side==='start'?d.f:s0, d.side==='end'?d.f:e0); } return; }
+    if(capDrag){ const d=capDrag; capDrag=null; tlDirty=true; if(d.b!==d.b0) moveBoundary(d.left,d.right,d.b); return; }
+    if(capBox){ const d=capBox; capBox=null; tlDirty=true;
+      if(d.moved){ hud(selCaps.size?`字幕 ${selCaps.size}件を選んでいます（Q で外す・Esc で解除）`:'囲んだ所に字幕はありません'); return; }
+      if(!d.add && selCaps.size) selCaps=new Set();      // a plain click on an empty spot lets the picked ones go
+      seekFrame(frameAt(e,d.fn)); return; }
+    if(st && !st.moved){ if(!st.shift && selCaps.size){ selCaps=new Set(); tlDirty=true; } seekFrame(frameAt(e,st.f)); } st=null; });
+  dt.addEventListener('pointercancel',()=>{ st=null; capDrag=null; markDrag=null; capBox=null; tlDirty=true; });
+  dt.addEventListener('pointerleave',()=>{ if(!capDrag&&!markDrag) dt.classList.remove('edge'); });
+  // double-click a caption on the timeline: 字幕一覧 opens that caption to retype it
+  dt.addEventListener('dblclick',e=>{ const L=capAt(e); if(!L) return; e.preventDefault(); editInList(L); });
+  // pinch / ⌘+wheel: the width follows the gesture smoothly (a mouse wheel notch is capped to one gentle step)
+  dt.addEventListener('wheel',e=>{
+    if(!(e.ctrlKey||e.metaKey)){
+      // two fingers sideways: the timeline moves left / right, at the same rate as the pinch zoom
+      if(Math.abs(e.deltaX)<=Math.abs(e.deltaY)) return; e.preventDefault();
+      const d=Math.max(-ZOOM_MAX_EVENT,Math.min(ZOOM_MAX_EVENT,e.deltaMode===1?e.deltaX*16:e.deltaX));
+      seekFrame(precisePos()+d*ZOOM_RATE*spanS*FPS); return; }
+    e.preventDefault();
+    const d=Math.max(-ZOOM_MAX_EVENT,Math.min(ZOOM_MAX_EVENT,e.deltaMode===1?e.deltaY*16:e.deltaY));
+    setZoom(spanS*Math.exp(d*ZOOM_RATE)); },{passive:false});
+}
+const ZOOM_RATE=0.012, ZOOM_MAX_EVENT=30;   // a whole pinch (deltaY about 150-250) is about 6-20 times wider / narrower
+// ---------------------------------------------------------------- emphasis / large QR: select, drag edges, set start / end
+let sel=null, markDrag=null;   // sel: {kind:'emphasis'|'large_qr', id:layer id, label}
+function markTargetOf(m){
+  if(m.kind==='emphasis'){ const L=captionLayers.find(L=>L.caption_kind==='emphasis' && L._s===m.start); return L?{kind:'emphasis', id:L.id, label:(L.text||m.label||'').replace(/\n/g,' ')}:null; }
+  if(m.kind==='qr'){ const L=olayers.find(L=>/^qr-/.test(L.id||'') && L.start===m.start); return L?{kind:'large_qr', id:L.id, label:'大型QR'}:null; }
+  if(m.kind==='thumbnail'){ const L=olayers.find(L=>L.type==='image' && /^thumb-/.test(L.id||'') && L.start===m.start); return L?{kind:'thumbnail', id:L.id, label:'過去動画のサムネイル'}:null; }
+  if(m.kind==='screen'){ const L=olayers.find(L=>L.id==='frame-'+m.label && L.start===m.start); return L?{kind:'screen', id:L.id, label:'画面収録 '+m.label}:null; }
+  return null; }
+const SEL_NAME=t=>t.kind==='emphasis'?`強調「${t.label}」`:t.kind==='thumbnail'?'過去動画のサムネイル':t.kind==='screen'?t.label:'大型QR';
+function markIs(m,t){ const x=markTargetOf(m); return !!x && x.id===t.id; }
+function targetLayer(t){ return M.layers.find(L=>L.id===t.id)||null; }
+function targetSpan(t){ const L=targetLayer(t); return L?[L._s??L.start, L._e??L.end]:[0,0]; }
+function markSpan(m){ if(markDrag && markIs(m,markDrag.t)){ return markDrag.side==='start'?[markDrag.f,m.end]:[m.start,markDrag.f]; } return [m.start,m.end]; }
+function inMarksLane(e){ const r=$('#detail').getBoundingClientRect(); const y=e.clientY-r.top; return y>=LANES.marks[0]-2 && y<=LANES.marks[1]+2; }
+function laneX(e){ const r=$('#detail').getBoundingClientRect(); const pos=precisePos(), a=pos-spanS*FPS, b=pos+spanS*FPS; return {mx:e.clientX-r.left, px:f=>(f-a)/(b-a)*r.width, a, b}; }
+function markAt(e){ const {mx,px}=laneX(e); for(const m of M.marks){ if(px(m.start)<=mx && mx<=px(m.end)){ const t=markTargetOf(m); if(t) return t; } } return null; }
+// captions on the timeline: the one under the pointer, picking with ⇧click or a box
+function inCapsLane(e){ const r=$('#detail').getBoundingClientRect(); const y=e.clientY-r.top; return y>=LANES.caps[0]-2 && y<=LANES.caps[1]+2; }
+function capAt(e){ if(!inCapsLane(e)) return null; const r=$('#detail').getBoundingClientRect(); const {mx,a,b}=laneX(e); const fr=a+mx/r.width*(b-a);
+  for(const L of caps){ if(L.caption_kind==='emphasis'||L.deleted) continue; const [cs,ce]=capSpan(L); if(cs<=fr && fr<ce) return L; } return null; }
+function toggleCapSel(L){ if(selCaps.has(L.key)) selCaps.delete(L.key); else selCaps.add(L.key); tlDirty=true;
+  hud(selCaps.size?`字幕 ${selCaps.size}件を選んでいます（Q で外す・Esc で解除）`:'選択を外しました'); }
+function boxSelect(){ const d=capBox; const lo=Math.min(d.f0,d.f1), hi=Math.max(d.f0,d.f1), ya=Math.min(d.y0,d.y1), yb=Math.max(d.y0,d.y1);
+  const s=new Set(d.add?d.base:[]);
+  if(ya<=LANES.caps[1] && yb>=LANES.caps[0]) for(const L of caps){ if(L.caption_kind==='emphasis'||L.deleted) continue; if(L.start<hi && lo<L.end) s.add(L.key); }
+  selCaps=s; }
+function markEdgeAt(e){ if(!inMarksLane(e)) return null; const {mx,px,a,b}=laneX(e); let best=null;
+  for(const m of M.marks){ if(m.end<a||m.start>b) continue; const t=markTargetOf(m); if(!t) continue;
+    for(const [side,f] of [['start',m.start],['end',m.end]]){ const d=Math.abs(px(f)-mx); if(d<=6 && (!best||d<best.d)) best={d,side,f0:f,t,m}; } }
+  return best; }
+function snapMark(f,d){ const [s0,e0]=[d.m.start,d.m.end];
+  const thr=Math.max(1,Math.round(8/($('#detail').clientWidth/(2*spanS*FPS))));
+  let best=null; for(const c of [...cutFrames, ...capStarts]){ const k=Math.abs(c-f); if(k<=thr && (!best||k<best.k)) best={k,c}; } if(best) f=best.c;
+  return d.side==='start'?Math.max(0,Math.min(e0-MIN_CAP,f)):Math.min(M.frames,Math.max(s0+MIN_CAP,f)); }
+function retime(t, a, b){
+  if(!cutsOK){ toast(M.cut_error||'出入りの手直しは使えません'); return; }
+  if(b-a<MIN_CAP){ toast('短くなりすぎます（12コマ未満）'); return; }
+  const now=new Date().toISOString(); const what=SEL_NAME(t);
+  const it={id:'rt'+Date.now().toString(36), op:'retime', target:{kind:t.kind, id:t.id}, preview:M.name, plan:M.plan, cut_rev:M.cut_rev||'', created:now,
+    frame:a, end_frame:b, start_source:sourceAt(a), end_source:sourceAt(b-1), label:`${what}を ${tc(a)} 〜 ${tc(b)} に`};
+  sendCuts([...cuts.items.filter(x=>!(x.op==='retime' && x.preview===M.name && x.target && x.target.id===t.id)), it], {keep:true}, it.label);
+}
+function renderSelBar(){ const bar=$('#selBar'); if(!bar) return;
+  if(sel && !targetLayer(sel)) sel=null;
+  if(!sel){ bar.hidden=true; bar.innerHTML=''; return; }
+  const [a,b]=targetSpan(sel);
+  bar.hidden=false;
+  const canPlace=PLACE_KINDS.includes(sel.kind), placed=canPlace && placeItemOf(sel), f=frameNow(), shown=a<=f && f<b;
+  bar.innerHTML=`<span>選択中</span><b>${esc(SEL_NAME(sel))}</b><span class="cl">${tc(a)} 〜 ${tc(b)}</span><span class="grow"></span>
+    <button class="btn sm" data-s="from" title="選んだものの出だしを再生位置にする（⇧I）">ここから出す</button>
+    <button class="btn sm" data-s="to" title="選んだものを再生位置で終える（⇧O）">ここで終える</button>
+    ${canPlace&&!shown?'<button class="btn sm" data-s="show" title="映像の上で位置と大きさを変えられます">映像の上で動かす</button>':''}
+    ${placed?'<button class="btn sm" data-s="unplace" title="位置と大きさの手直しを取り消す">元の位置に戻す</button>':''}
+    <button class="btn sm" data-s="clear" title="選択を外す（Esc）">選択を外す</button>`; }
+function selFromHere(){ const [a,b]=targetSpan(sel), f=frameNow(); if(f>=b-MIN_CAP){ toast('終わりより前に再生位置を置いてください'); return; } retime(sel, f, b); }
+function selToHere(){ const [a,b]=targetSpan(sel), f=frameNow(); if(f<=a+MIN_CAP){ toast('出だしより後に再生位置を置いてください'); return; } retime(sel, a, f); }
+function onSelBar(e){ const b=e.target.closest('[data-s]'); if(!b) return; const k=b.dataset.s;
+  if(k==='from') selFromHere(); else if(k==='to') selToHere();
+  else if(k==='show'){ const [a]=targetSpan(sel); seekFrame(a+Math.min(15,Math.round(FPS/2))); renderSelBar(); }
+  else if(k==='unplace'){ const t=sel; sendCuts(cuts.items.filter(x=>!(x.op==='place' && x.preview===M.name && x.target && x.target.id===t.id)), {keep:true}, `${SEL_NAME(t)}を元の位置に戻しました`); }
+  else { sel=null; renderSelBar(); tlDirty=true; } }
+
+// ---------------------------------------------------------------- large QR / thumbnail: move and resize on the picture
+const PLACE_KINDS=['large_qr','thumbnail'];
+function placeItemOf(t){ return cuts.items.find(x=>x.op==='place' && x.preview===M.name && x.target && x.target.id===t.id)||null; }
+let placeDrag=null;
+function placeTarget(){ if(!sel || !PLACE_KINDS.includes(sel.kind)) return null; const L=targetLayer(sel); if(!L || L.type!=='image') return null;
+  const f=frameNow(); if(!(L.start<=f && f<L.end)) return null; const el=domLayers.get(L.i); if(!el || !el.naturalWidth) return null;
+  return {L, el, w:L.width||el.naturalWidth, h:L.height||el.naturalHeight}; }
+function updatePlaceBox(){ const box=$('#placeBox'); if(!box) return; if(placeDrag) return;
+  const t=placeTarget(); if(!t){ box.style.display='none'; return; }
+  Object.assign(box.style,{display:'block', left:t.L.x+'px', top:t.L.y+'px', width:t.w+'px', height:t.h+'px'}); box.style.setProperty('--u', (1/stageScale)+'px');
+  box.querySelector('.size').textContent=`${Math.round(t.w/(t.el.naturalWidth||t.w)*100)}%`; }
+function setupPlaceBox(){
+  const stage=$('#stage'); const box=document.createElement('div'); box.id='placeBox';
+  box.innerHTML='<div class="size"></div><div class="ph" data-c="nw"></div><div class="ph" data-c="ne"></div><div class="ph" data-c="sw"></div><div class="ph" data-c="se"></div>';
+  const guideX=document.createElement('div'), guideY=document.createElement('div'); guideX.id=guideY.id='placeGuide';
+  stage.append(box, guideX, guideY);
+  const stop=e=>{ e.stopPropagation(); };
+  box.addEventListener('click',stop);
+  box.addEventListener('pointerdown',e=>{ const t=placeTarget(); if(!t) return; e.stopPropagation(); e.preventDefault(); audio.pause();
+    box.setPointerCapture(e.pointerId); const c=e.target.closest('.ph');
+    placeDrag={t, corner:c?c.dataset.c:null, x0:e.clientX, y0:e.clientY, box:{x:t.L.x, y:t.L.y, w:t.w, h:t.h}, now:{x:t.L.x, y:t.L.y, w:t.w, h:t.h}}; });
+  box.addEventListener('pointermove',e=>{ const d=placeDrag; if(!d) return; e.stopPropagation();
+    const dx=(e.clientX-d.x0)/stageScale, dy=(e.clientY-d.y0)/stageScale, b=d.box, r=b.h/b.w; let n;
+    if(!d.corner){ n={x:b.x+dx, y:b.y+dy, w:b.w, h:b.h};
+      // the middle of the picture pulls the image's middle (within 14 px)
+      const cx=n.x+n.w/2, cy=n.y+n.h/2; let gx=false, gy=false;
+      if(Math.abs(cx-M.width/2)<14){ n.x=M.width/2-n.w/2; gx=true; } if(Math.abs(cy-M.height/2)<14){ n.y=M.height/2-n.h/2; gy=true; }
+      Object.assign(guideX.style,{display:gx?'block':'none', left:(M.width/2-2)+'px', top:'0px', width:'4px', height:M.height+'px'});
+      Object.assign(guideY.style,{display:gy?'block':'none', top:(M.height/2-2)+'px', left:'0px', height:'4px', width:M.width+'px'}); }
+    else { const sx=d.corner.includes('e')?1:-1, sy=d.corner.includes('s')?1:-1;
+      const w=Math.max(64, b.w+(Math.abs(dx)>Math.abs(dy/r)?sx*dx:sy*dy/r)), h=w*r;     // the larger pull decides; aspect kept
+      n={x:sx>0?b.x:b.x+b.w-w, y:sy>0?b.y:b.y+b.h-h, w, h}; }
+    d.now=n; Object.assign(box.style,{left:n.x+'px', top:n.y+'px', width:n.w+'px', height:n.h+'px'});
+    Object.assign(d.t.el.style,{left:n.x+'px', top:n.y+'px', width:n.w+'px', height:n.h+'px'});
+    box.querySelector('.size').textContent=`${Math.round(n.w/(d.t.el.naturalWidth||n.w)*100)}%`; });
+  const end=e=>{ const d=placeDrag; if(!d) return; e.stopPropagation(); placeDrag=null; guideX.style.display=guideY.style.display='none';
+    const n=d.now, b=d.box; if(Math.abs(n.x-b.x)<1 && Math.abs(n.y-b.y)<1 && Math.abs(n.w-b.w)<1) return;
+    if(!cutsOK){ toast(M.cut_error||'位置の手直しは使えません'); return; }
+    const t=sel, L=d.t.L, what=SEL_NAME(t);
+    const it={id:'pl'+Date.now().toString(36), op:'place', target:{kind:t.kind, id:t.id}, preview:M.name, plan:M.plan, cut_rev:M.cut_rev||'', created:new Date().toISOString(),
+      frame:L.start, start_source:sourceAt(L.start), x:Math.round(n.x), y:Math.round(n.y), width:Math.round(n.w), height:Math.round(n.h),
+      label:`${what}を ${Math.round(n.x)},${Math.round(n.y)} に ${Math.round(n.w/(d.t.el.naturalWidth||n.w)*100)}% で置く`};
+    sendCuts([...cuts.items.filter(x=>!(x.op==='place' && x.preview===M.name && x.target && x.target.id===t.id)), it], {keep:true}, it.label); };
+  box.addEventListener('pointerup',end); box.addEventListener('pointercancel',end);
+}
+
+// ---------------------------------------------------------------- undo / redo of everything done on this page
+const hist={undo:[], redo:[]}, snap={}; let restoring=false;
+const HIST_LABEL={comments:'修正指示', edits:'字幕の手直し', cuts:'カット・出入りの手直し'};
+function snapshot(kind){ return JSON.stringify(kind==='comments'?comments.items:kind==='edits'?edits.items.map(({_r,...x})=>x):cuts.items); }
+function remember(kind){ snap[kind]=snapshot(kind); }
+function record(kind){ const now=snapshot(kind);
+  if(!restoring && snap[kind]!=null && now!==snap[kind]){ hist.undo.push({kind, before:snap[kind], after:now}); if(hist.undo.length>200) hist.undo.shift(); hist.redo.length=0; }
+  snap[kind]=now; updateHist(); }
+function updateHist(){ const u=$('#bUndo'), r=$('#bRedo'); if(!u) return; u.disabled=!hist.undo.length; r.disabled=!hist.redo.length;
+  u.title=hist.undo.length?`元に戻す：${HIST_LABEL[hist.undo[hist.undo.length-1].kind]}（⌘Z）`:'元に戻す（⌘Z）';
+  r.title=hist.redo.length?`やり直す：${HIST_LABEL[hist.redo[hist.redo.length-1].kind]}（⌘⇧Z）`:'やり直す（⌘⇧Z）'; }
+async function restoreState(kind, state, label){
+  restoring=true;
+  try{ const items=JSON.parse(state);
+    if(kind==='comments'){ comments.items=items; save(); renderList(); }
+    else if(kind==='edits'){ edits.items=items; saveEdits(); rebuildCaps(); }
+    else await sendCuts(items, {keep:true}, label);
+  } finally { restoring=false; snap[kind]=snapshot(kind); updateHist(); }
+  if(kind!=='cuts') toast(label); }
+async function undo(){ if(busy){ toast('反映中です。少し待ってください'); return; } const h=hist.undo.pop(); if(!h){ hud('戻せる操作はありません'); return; }
+  hist.redo.push(h); await restoreState(h.kind, h.before, `元に戻しました（${HIST_LABEL[h.kind]}）`); }
+async function redo(){ if(busy){ toast('反映中です。少し待ってください'); return; } const h=hist.redo.pop(); if(!h){ hud('やり直せる操作はありません'); return; }
+  hist.undo.push(h); await restoreState(h.kind, h.after, `やり直しました（${HIST_LABEL[h.kind]}）`); }
+// caption edges in the detail timeline: the boundary under the pointer, with the captions on both sides
+function edgeAt(e){
+  const dt=$('#detail'), r=dt.getBoundingClientRect(); const y=e.clientY-r.top; const [y0,y1]=LANES.caps; if(y<y0-2||y>y1+2) return null;
+  const pos=precisePos(), a=pos-spanS*FPS, b=pos+spanS*FPS, px=f=>(f-a)/(b-a)*r.width; const mx=e.clientX-r.left;
+  let best=null;
+  for(const L of caps){ if(L.caption_kind==='emphasis'||L.deleted||L.end<a||L.start>b) continue;
+    for(const f of [L.start,L.end]){ const d=Math.abs(px(f)-mx); if(d<=6 && (!best||d<best.d)) best={d,b0:f}; } }
+  if(!best) return null;
+  const track=caps.filter(L=>!L.deleted);
+  return {b0:best.b0, left:track.filter(L=>L.end===best.b0), right:track.filter(L=>L.start===best.b0)};
+}
+const MIN_CAP=12;
+function snapEdge(f,d){
+  let lo=-1e9, hi=1e9; for(const L of d.left) lo=Math.max(lo,L.start+MIN_CAP); for(const L of d.right) hi=Math.min(hi,L.end-MIN_CAP);
+  const thr=Math.max(1,Math.round(8/($('#detail').clientWidth/(2*spanS*FPS))));   // within 8 px of a cut point: snap to it
+  let best=null; for(const c of cutFrames){ const k=Math.abs(c-f); if(k<=thr && (!best||k<best.k)) best={k,c}; }
+  if(best) f=best.c;
+  return Math.max(lo,Math.min(hi,Math.max(0,Math.min(M.frames,f))));
+}
+function spanText(v){ return v<9.95?(Math.round(v*10)/10).toString():String(Math.round(v)); }
+function setZoom(v){ spanS=Math.max(SPAN_MIN,Math.min(SPAN_MAX,v)); try{ localStorage.setItem('review.span',spanS); }catch{}
+  $('#zLabel').textContent=`前後 ${spanText(spanS)}秒`; $('#zIn').disabled=spanS<=SPAN_MIN+1e-6; $('#zOut').disabled=spanS>=SPAN_MAX-1e-6; tlDirty=true; }
+// buttons and keys: the next preset in that direction
+function zoomBy(d){ const next=d>0?[...SPANS].reverse().find(v=>v<spanS-1e-6):SPANS.find(v=>v>spanS+1e-6); if(next==null) return; setZoom(next); hud(`時間軸 前後 ${next}秒`); }
+
+// ---------------------------------------------------------------- comments
+function sourceAt(f){ const c=clips[Math.max(0,bsearch(clips,f))]; return {name:c.source_name, seconds:+(c.src+(f-c.start)/FPS).toFixed(3)}; }
+// the output frame of a source time; when the source is used twice (the avan), the one nearest to `near`
+function frameFromSource(src, near){
+  if(!src) return null; let best=null;
+  for(const c of clips){ const d=(src.seconds-c.src)*FPS; if(c.source_name===src.name && d>=-0.5 && d<c.end-c.start){ const f=Math.min(c.end-1,Math.max(c.start,Math.round(c.start+d)));
+    if(near==null) return f; if(best==null || Math.abs(f-near)<Math.abs(best-near)) best=f; } }
+  return best;
+}
+function commentFrame(it){
+  if(sameTimeline(it)) return it.frame;
+  return frameFromSource(it.source, it.frame);
+}
+function setSave(state, text){ const s=$('#saveState'); s.className='pill'+(state?' '+state:''); s.querySelector('.st').textContent=text; }
+let saveTimer=null;
+function save(){ record('comments'); setSave('saving','保存中'); clearTimeout(saveTimer); saveTimer=setTimeout(async()=>{
+  try{ const r=await fetch('/api/comments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(comments)}); if(!r.ok) throw new Error(await r.text());
+    const d=await r.json(); comments.saved_at=d.saved_at; setSave('','保存済み '+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})); }
+  catch(e){ setSave('error','保存できませんでした'); toast('保存できませんでした：'+e.message); } },250); }
+const itemKey=it=>it.id||it.created;
+const findItem=id=>comments.items.find(x=>itemKey(x)===id);
+const itemEls=new Map(); let firstList=true;
+function fillItem(el,it){
+  const fr=commentFrame(it); const range=fr==null?'この版に該当なし':tc(fr)+(it.end_frame&&it.preview===M.name?' 〜 '+tc(it.end_frame):'');
+  const other=it.preview!==M.name?`<span class="tag2">${esc(it.preview)} の指示</span>`:'';
+  el.classList.toggle('done',it.status==='done');
+  el.innerHTML=`<div class="head"><button class="check" data-a="done" title="${it.status==='done'?'未対応に戻す':'対応済みにする'}" aria-label="${it.status==='done'?'未対応に戻す':'対応済みにする'}">${ICON.check}</button>
+      <button class="it-tc${fr==null?' na':''}" data-a="seek">${range}</button>${other}</div>
+    ${it.replacement!=null?`<div class="fix">字幕 <s>${esc(it.caption?.text||'')}</s> → <b>${esc(it.replacement)}</b></div>`:''}
+    ${it.text?`<div class="body">${esc(it.text)}</div>`:''}
+    ${it.replacement==null && it.caption?.text?`<div class="ctx">字幕：${esc(it.caption.text)}</div>`:''}
+    ${it.reply?`<div class="reply">${esc(it.reply)}</div>`:''}
+    <div class="tools"><button class="btn sm" data-a="jump"${fr==null?' disabled':''}>前後を見る</button><button class="btn sm" data-a="edit">書き直す</button><span class="grow"></span><button class="btn sm danger" data-a="del">消す</button></div>`;
+}
+function startEdit(el,it){
+  editingId=itemKey(it); const body=el.querySelector('.body'); const tools=el.querySelector('.tools');
+  const box=document.createElement('div'); box.className='edit';
+  box.innerHTML=`<textarea class="field">${esc(it.text||'')}</textarea><div class="row" style="margin-top:6px"><span class="grow"></span><button class="btn sm" data-e="cancel">やめる</button><button class="btn sm primary" data-e="ok">保存</button></div>`;
+  if(body) body.replaceWith(box); else el.querySelector('.head').after(box); tools.hidden=true;
+  const ta=box.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length,ta.value.length);
+  const done=ok=>{ if(ok){ const cur=findItem(editingId); if(cur){ cur.text=ta.value.trim(); cur.updated=new Date().toISOString(); save(); } }
+    const id=editingId; editingId=null; const e2=itemEls.get(id); if(e2) e2._sig=null; renderList(); };
+  box.querySelector('[data-e=ok]').onclick=()=>done(true); box.querySelector('[data-e=cancel]').onclick=()=>done(false);
+  ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){ e.preventDefault(); done(true); } else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); done(false); } });
+}
+function onItemClick(e){
+  const b=e.target.closest('[data-a]'); if(!b) return; const el=b.closest('.item'); const it=findItem(el.dataset.id); if(!it) return;
+  const a=b.dataset.a, fr=commentFrame(it);
+  if(a==='seek' && fr!=null) seekFrame(fr);
+  if(a==='jump' && fr!=null){ seekFrame(fr-60); audio.play(); }
+  if(a==='edit') startEdit(el,it);
+  if(a==='done'){ it.status=it.status==='done'?'open':'done'; save(); renderList(); }
+  if(a==='del'){ if(!b.classList.contains('armed')){ b.classList.add('armed'); b.textContent='もう一度押すと消えます'; clearTimeout(b._t);
+      b._t=setTimeout(()=>{ b.classList.remove('armed'); b.textContent='消す'; },3000); return; }
+    comments.items=comments.items.filter(x=>x!==it); save(); renderList(); toast('消しました'); tlDirty=true; }
+}
+let noteFilter=(()=>{ try{ return localStorage.getItem('review.noteFilter')||'all'; }catch{ return 'all'; } })();
+function setNoteFilter(v){ noteFilter=v; try{ localStorage.setItem('review.noteFilter',v); }catch{}
+  document.querySelectorAll('#noteFilter button').forEach(b=>b.classList.toggle('on',b.dataset.f===v)); renderList(); }
+function renderList(){
+  const box=$('#list'); const items=[...comments.items].filter(it=>noteFilter!=='open'||it.status!=='done').sort((p,q)=>(commentFrame(p)??1e12)-(commentFrame(q)??1e12));
+  const seen=new Set(); let prev=null, stagger=0;
+  for(const it of items){ const id=itemKey(it); seen.add(id); let el=itemEls.get(id); let fresh=false;
+    if(!el){ el=document.createElement('div'); el.className='item'; el.dataset.id=id; itemEls.set(id,el); fresh=true; }
+    const sig=JSON.stringify([it.text,it.status,it.replacement,it.reply,it.frame,it.end_frame,it.preview,it.caption?.text,commentFrame(it)]);
+    if(el._sig!==sig && editingId!==id){ fillItem(el,it); el._sig=sig; }
+    const want=prev?prev.nextSibling:box.firstChild; if(want!==el) box.insertBefore(el,want); prev=el;
+    if(fresh) anim(el,[{opacity:0,transform:'translateY(-8px) scale(.98)'},{opacity:1,transform:'none'}],{duration:420,delay:firstList?Math.min(stagger++*25,400):0,fill:'backwards'});
+  }
+  for(const [id,el] of itemEls) if(!seen.has(id)){ itemEls.delete(id); if(id===editingId) editingId=null;
+    const h=el.offsetHeight; el.style.pointerEvents='none';
+    const a=anim(el,[{opacity:1,transform:'none',height:h+'px',marginBottom:'8px'},{opacity:0,transform:'translateX(24px) scale(.97)',height:'0px',marginBottom:'0px',paddingTop:'0px',paddingBottom:'0px'}],{duration:300});
+    if(a) a.onfinish=()=>el.remove(); else el.remove(); }
+  let em=box.querySelector('.empty'); if(!items.length){ if(!em){ em=document.createElement('div'); em.className='empty'; em.textContent=noteFilter==='open'&&comments.items.length?'未対応の指示はありません':'修正指示はまだありません'; box.appendChild(em); } } else if(em) em.remove();
+  firstList=false;
+  const open=comments.items.filter(i=>i.status!=='done').length;
+  updateCountAll();
+  const tcnt=$('#tabCount'); if(tcnt.textContent!==String(open)){ tcnt.textContent=open; tcnt.classList.remove('bump'); void tcnt.offsetWidth; tcnt.classList.add('bump'); }
+  markNotedCaptions(); tlDirty=true;
+}
+function updateRange(f){ const r=$('#range'); lastCardKey='';
+  if(rangeIn==null){ r.textContent='位置 '+tc(f==null?frameNow():f); r.classList.remove('set'); $('#clearRange').hidden=true; }
+  else { r.textContent=`範囲 ${tc(rangeIn)}${rangeOut!=null?' 〜 '+tc(rangeOut):' 〜'}`; r.classList.add('set'); $('#clearRange').hidden=false; }
+  renderCutCard(); }
+function openCapFix(){ if(!fixingCapCandidate){ toast('いまの位置に字幕はありません。足すときは ⇧A'); return; } openEditor(fixingCapCandidate,'edit',null); }
+function addComment(fix){
+  const text=$('#note').value.trim(); const rep=fix?fix.text:null;
+  if(!text && !(rep && rep!==fix.cap.text)) { toast('指示を書いてください'); $('#note').focus(); return false; }
+  const f=fix?fix.cap.start:(rangeIn!=null?rangeIn:frameNow()); const e=fix?null:(rangeOut!=null&&rangeOut>f?rangeOut:null);
+  const fixingCap=fix?fix.cap:null;
+  const capL=fixingCap||captionsAt(f).slice(-1)[0];
+  const it={id:'r'+Date.now().toString(36), preview:M.name, plan:M.plan, cut_rev:M.cut_rev||'', frame:f, end_frame:e, tc:tc(f), end_tc:e?tc(e):null,
+    source:sourceAt(f), kind:'', text, status:'open', created:new Date().toISOString(),
+    caption:capL?{id:capL.caption_id||capL.id, text:capL.text||'', kind:capL.caption_kind||'normal', speaker:capL.speaker||null}:null};
+  if(fixingCap && rep) it.replacement=rep;
+  comments.items.push(it); save(); renderList();
+  $('#note').value=''; if(!fix){ rangeIn=rangeOut=null; updateRange(); } toast(fix?'修正指示として送りました':'追加しました'); return true;
+}
+
+// ---------------------------------------------------------------- caption edits (retype / add / hide on the page)
+const EDIT_LABEL={edit:'手直し', add:'手直し・追加', delete:'出さない', time:'出入り'};
+function stampFor(L){ const last=Math.max(L.start,L.end-1);
+  return {preview:M.name, plan:M.plan, cut_rev:M.cut_rev||'', caption_id:L.caption_id||L.id, layer_id:L.id, caption_kind:L.caption_kind||'normal',
+    frame:L.start, end_frame:L.end, tc:tc(L.start), end_tc:tc(L.end), source:sourceAt(L.start), end_source:sourceAt(last),
+    old_text:L.text||'', old_speaker:L.speaker||null}; }
+// where an edit lands in this preview: the same caption id, or the same words at the same place in the source
+function resolveEdit(it){
+  if(it.op==='add'){
+    let a=null,b=null;
+    if(sameTimeline(it)){ a=it.frame; b=it.end_frame; }
+    else { a=frameFromSource(it.source,it.frame); const e=frameFromSource(it.end_source,it.end_frame); b=e!=null?e+1:null; if(a!=null && (b==null||b<=a)) b=a+Math.max(1,(it.end_frame||it.frame+1)-it.frame); }
+    if(a==null) return null; b=Math.min(M.frames,b);
+    const applied=it.preview!==M.name && captionLayers.some(L=>L.text===it.text && L.start<b && a<L.end);
+    return {a,b,applied};
+  }
+  let L=layerByCap.get(it.caption_id);
+  if(L && it.preview!==M.name && L.text!==it.old_text && L.text!==it.text) L=null;
+  if(!L){ const fr=frameFromSource(it.source,it.frame); if(fr!=null) L=captionLayers.find(x=>x._s-15<=fr && fr<x._e && (x.text===it.old_text||x.text===it.text))||null; }
+  if(!L) return null;
+  if(it.op==='time'){
+    let a,b; if(sameTimeline(it)){ a=it.frame; b=it.end_frame; }
+    else { a=frameFromSource(it.start_source,L._s); const e=frameFromSource(it.end_source,L._e-1); b=e!=null?e+1:null; }
+    if(a==null||b==null||b<=a) return null;
+    return {L,a,b,applied:it.preview!==M.name && L._s===a && L._e===b};
+  }
+  const applied=it.preview!==M.name && it.op==='edit' && L.text===it.text && (it.speaker==null || (L.speaker||null)===it.speaker);
+  return {L,applied};
+}
+function rebuildCaps(){
+  const byL=new Map(), timeL=new Map(), adds=[]; let maxI=0;
+  for(const L of captionLayers){ maxI=Math.max(maxI,L.i); L.start=L._s; L.end=L._e; }
+  for(const it of edits.items){ const r=resolveEdit(it); it._r=r;
+    if(!r || r.applied) continue;
+    if(it.op==='add') adds.push({it,r}); else if(it.op==='time'){ if(!timeL.has(r.L.i)) timeL.set(r.L.i,it); } else if(!byL.has(r.L.i)) byL.set(r.L.i,it); }
+  // moved captions: the PNG layer itself shows at the new time; neighbours never overlap
+  for(const L of captionLayers){ const it=timeL.get(L.i); if(it){ L.start=it._r.a; L.end=it._r.b; } }
+  const track=captionLayers.filter(L=>L.caption_kind!=='emphasis').sort((p,q)=>p.start-q.start||p.end-q.end);
+  for(let k=0;k+1<track.length;k++){ const p=track[k], q=track[k+1]; if(p.end>q.start){ if(timeL.has(q.i) && !timeL.has(p.i)) p.end=q.start; else q.start=p.end; } }
+  caps=captionLayers.filter(L=>L.end>L.start).map(L=>{ const it=byL.get(L.i)||null; const ed=it&&it.op==='edit';
+    return {key:'L'+L.i, i:L.i, L, start:L.start, end:L.end, caption_id:L.caption_id||L.id, caption_kind:L.caption_kind||'normal', emphasis_role:L.emphasis_role,
+      text:ed?it.text:(L.text||''), speaker:ed&&it.speaker!==undefined?it.speaker:(L.speaker||null), origText:L.text||'', origSpeaker:L.speaker||null,
+      edit:it, time:timeL.get(L.i)||null, add:null, deleted:!!(it&&it.op==='delete')}; });
+  adds.forEach(({it,r},n)=>caps.push({key:'A'+it.id, i:maxI+1+n, L:null, start:r.a, end:r.b, caption_id:it.id, caption_kind:'normal',
+    text:it.text, speaker:it.speaker||'K', origText:'', origSpeaker:null, edit:null, add:it, deleted:false}));
+  caps.sort((a,b)=>a.start-b.start||a.i-b.i);
+  capStarts=[...new Set(caps.map(L=>L.start))].sort((a,b)=>a-b);
+  hiddenL=new Set(byL.keys());
+  for(const o of overlays) o.el.remove(); overlays=[];
+  for(const e of caps) if((e.edit && !e.deleted) || e.add) overlays.push({e, el:makeOverlay(e), on:null});
+  if(selCaps.size){ const ks=new Set(caps.filter(c=>!c.deleted).map(c=>c.key)); selCaps=new Set([...selCaps].filter(k=>ks.has(k))); }
+  capsVer++; lastCapKey=null;
+  if(capRows.length || $('#caps').childElementCount) renderTranscript();
+  renderEdits(); markNotedCaptions(); tlDirty=true; if(ready) render(true);
+}
+const CAP_BOTTOM=1026, CAP_LH=94; // last line box bottom: ink bottom lands near y=1027 like the caption PNGs
+// retyped captions are drawn by the server with the export's caption style (planning/caption-style.json);
+// the text below is only a stand-in when the case has no style file
+const capImgCache=new Map();
+function capImage(e){ const body={kind:e.caption_kind==='emphasis'?'emphasis':'normal', text:e.text, speaker:e.speaker||'K', role:e.L?e.L.emphasis_role||null:null};
+  const k=JSON.stringify(body);
+  if(!capImgCache.has(k)) capImgCache.set(k, fetch('/api/caption-image',{method:'POST',headers:{'Content-Type':'application/json'},body:k})
+    .then(async r=>{ const d=await r.json(); if(!r.ok) throw new Error(d.error||r.status); return d; }).catch(err=>{ capImgCache.delete(k); toast('字幕の画像を作れませんでした：'+err.message); return null; }));
+  return capImgCache.get(k); }
+function makeOverlay(e){
+  const el=document.createElement('div'); el.className='capfix '+(e.caption_kind==='emphasis'?'E':(e.speaker==='S'?'S':'K'));
+  if(M.caption_style){ el.style.visibility='hidden';
+    capImage(e).then(d=>{ if(!d){ el.style.visibility=''; return; } const im=new Image(); im.decoding='async';
+      im.onload=()=>{ el.className='capimg'; el.textContent=''; el.removeAttribute('style'); el.style.left=d.x+'px'; el.style.top=d.y+'px'; el.style.zIndex=10+e.i*2;
+        el.style.display=overlays.find(o=>o.el===el&&o.on)?'block':'none'; el.appendChild(im); };
+      im.onerror=()=>{ el.style.visibility=''; }; im.src=d.url||('/media/'+d.media+'?v='+encodeURIComponent(d.v||'')); }); }   // d.url: drawn in the browser (the hosted site)
+  el.innerHTML=`<span class="bk">${esc(e.text)}</span><span class="fg" aria-hidden="true">${esc(e.text)}</span>`;
+  const n=e.text.split('\n').length; el.style.zIndex=10+e.i*2;
+  if(e.caption_kind==='emphasis' && e.L){ // keep the emphasis where its image was
+    const L=e.L, put=(w,h)=>{ el.style.left=(L.x+w/2-960)+'px'; el.style.top=(L.y+h/2-n*CAP_LH/2)+'px'; };
+    put(1100,200); const im=new Image(); im.onload=()=>put(im.naturalWidth,im.naturalHeight); im.src=mediaUrl(L.media); }
+  else el.style.top=(CAP_BOTTOM-n*CAP_LH)+'px';
+  $('#stage').appendChild(el); return el;
+}
+function cleanText(t){ return String(t||'').replace(/\r/g,'').split('\n').map(x=>x.trim()).filter(Boolean).join('\n'); }
+let editsTimer=null, editsBusy=0;
+function saveEdits(){ record('edits'); setSave('saving','保存中'); if(editsTimer) clearTimeout(editsTimer); else editsBusy++; editsTimer=setTimeout(async()=>{ editsTimer=null;
+  try{ const body={schema:edits.schema, items:edits.items.map(({_r,...x})=>x)};
+    const r=await fetch('/api/caption-edits',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); if(!r.ok) throw new Error(await r.text());
+    const d=await r.json(); edits.saved_at=d.saved_at; setSave('','保存済み '+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}));
+    // a moved Point / emphasis takes its SE (and push-in) along: the server rebuilt the timeline and the mix
+    if(d.manifest && (d.manifest.follow_rev||'')!==(M.follow_rev||'') && !busy) await applyManifest(d.manifest,{keep:true}); }
+  catch(e){ setSave('error','保存できませんでした'); toast('字幕の手直しを保存できませんでした：'+e.message); }
+  finally{ editsBusy--; } },200); }
+function applyEdit(e, mode, text, speaker){
+  text=cleanText(text);
+  if(!text){ toast(mode==='add'?'字幕の文字を入れてください':'文字が空です。消すときは「出さない」'); return false; }
+  if(text.split('\n').length>2){ toast('字幕は2行までです'); return false; }
+  if(text.length>400){ toast('長すぎます'); return false; }
+  const now=new Date().toISOString();
+  if(mode==='add'){
+    const a=e.start, b=e.end;
+    edits.items.push({id:'ce'+Date.now().toString(36), op:'add', preview:M.name, plan:M.plan, frame:a, end_frame:b, tc:tc(a), end_tc:tc(b),
+      source:sourceAt(a), end_source:sourceAt(b-1), text, speaker:speaker||'K', created:now});
+    rangeIn=rangeOut=null; updateRange();
+  } else if(e.add){ Object.assign(e.add,{text, speaker:speaker||'K', updated:now}); }
+  else {
+    const same=text===e.origText && (speaker||null)===(e.origSpeaker||null);
+    if(same){ if(e.edit) edits.items=edits.items.filter(x=>x!==e.edit); }
+    else if(e.edit){ const op=e.edit.op; Object.assign(e.edit, stampFor(e.L), {op:'edit', text, speaker:speaker||null, updated:now}); if(op==='delete') e.edit.created=now; }
+    else edits.items.push({id:'ce'+Date.now().toString(36), op:'edit', ...stampFor(e.L), text, speaker:speaker||null, created:now});
+  }
+  saveEdits(); rebuildCaps(); toast(mode==='add'?'字幕を足しました':'字幕を直しました'); return true;
+}
+function hideCap(e){
+  const now=new Date().toISOString();
+  if(e.add){ edits.items=edits.items.filter(x=>x!==e.add); saveEdits(); rebuildCaps(); toast('足した字幕を消しました'); return; }
+  if(e.edit){ Object.assign(e.edit, stampFor(e.L), {op:'delete', updated:now}); delete e.edit.text; delete e.edit.speaker; }
+  else edits.items.push({id:'ce'+Date.now().toString(36), op:'delete', ...stampFor(e.L), created:now});
+  saveEdits(); rebuildCaps(); toast('この字幕は出さないようにしました');
+}
+function undoEdit(it){ edits.items=edits.items.filter(x=>x!==it); saveEdits(); rebuildCaps(); toast('手直しを取り消しました'); }
+// ---------------------------------------------------------------- caption timing (buttons / dragging an edge)
+function setCapRange(e, a, b, now){
+  if(e.add){ Object.assign(e.add,{frame:a, end_frame:b, tc:tc(a), end_tc:tc(b), source:sourceAt(a), end_source:sourceAt(b-1), cut_rev:M.cut_rev||'', preview:M.name, updated:now}); return; }
+  const L=e.L; if(!L) return;
+  edits.items=edits.items.filter(x=>!(x.op==='time' && x._r && x._r.L===L));
+  if(a===L._s && b===L._e) return;     // back where the plan had it
+  // start_source / end_source: the first and the last shown frame as source time (review_edits.py applies them)
+  edits.items.push({id:'ct'+Date.now().toString(36)+L.i, op:'time', preview:M.name, plan:M.plan, cut_rev:M.cut_rev||'',
+    caption_id:L.caption_id||L.id, layer_id:L.id, caption_kind:L.caption_kind||'normal', frame:a, end_frame:b, tc:tc(a), end_tc:tc(b),
+    source:sourceAt(a), start_source:sourceAt(a), end_source:sourceAt(b-1), old_text:L.text||'', old_frame:L._s, old_end_frame:L._e, created:now});
+}
+function moveBoundary(left, right, f){
+  if(!editsOK){ toast('手直しを保存するには、確認画面のサーバーを起動し直してください'); return; }
+  const now=new Date().toISOString();
+  for(const e of left){ if(f-e.start<MIN_CAP){ toast('字幕が短くなりすぎます（12コマ未満）'); return; } }
+  for(const e of right){ if(e.end-f<MIN_CAP){ toast('字幕が短くなりすぎます（12コマ未満）'); return; } }
+  for(const e of left) setCapRange(e, e.start, f, now);
+  for(const e of right) setCapRange(e, f, e.end, now);
+  saveEdits(); rebuildCaps(); toast(`字幕の切り替えを ${tc(f)} にしました`);
+}
+function capFromHere(){
+  const f=frameNow(); const e=currentCap(f); if(!e){ toast('いまの位置に字幕はありません'); return; }
+  if(e.start===f){ toast('この字幕はもうここから出ています'); return; }
+  const track=caps.filter(L=>!L.deleted); moveBoundary(track.filter(L=>L.end===e.start), [e], f);
+}
+function nextFromHere(){
+  const f=frameNow(); const track=caps.filter(L=>!L.deleted); const cur=currentCap(f);
+  if(cur){ // the caption after the current one starts here (the current one ends here)
+    if(f<=cur.start){ toast('この位置では字幕を切り替えられません'); return; }
+    moveBoundary([cur], track.filter(L=>L.start===cur.end), f); return; }
+  const nxt=track.filter(L=>L.start>f).sort((p,q)=>p.start-q.start)[0];
+  if(!nxt){ toast('この先に字幕はありません'); return; }
+  moveBoundary(track.filter(L=>L.end===nxt.start && L.start<f), [nxt], f);
+}
+
+// ---------------------------------------------------------------- keys on the timeline: take captions off (Q), split (S), cut to an edit point (A / D)
+// the normal caption at the playhead (not an emphasis, not one already taken off)
+function capAtHead(f){ return captionsAt(f).filter(c=>c.caption_kind!=='emphasis' && !c.deleted).slice(-1)[0]||null; }
+// Q: the picked captions, or the one at the playhead, leave the track. The caption before holds on to the next one,
+// so the track keeps no hole (delete + that caption's time); one ⌘Z brings everything back. The other captions keep their times.
+function removeCaps(){
+  if(!editsOK){ toast('手直しを保存するには、確認画面のサーバーを起動し直してください'); return; }
+  let targets=caps.filter(L=>selCaps.has(L.key) && !L.deleted && L.caption_kind!=='emphasis');
+  if(!targets.length){ const e=capAtHead(frameNow()); if(e) targets=[e]; }
+  if(!targets.length){ toast('外す字幕がありません（再生位置に字幕が無いときは、時間軸で選んでください）'); return; }
+  const now=new Date().toISOString(), R=new Set(targets);
+  const track=caps.filter(L=>!L.deleted && L.caption_kind!=='emphasis').sort((p,q)=>p.start-q.start||p.end-q.end);
+  const grow=[];
+  for(let k=0;k<track.length;k++){ if(!R.has(track[k])) continue; let j=k; while(j+1<track.length && R.has(track[j+1])) j++;
+    const prev=track[k-1], next=track[j+1], runA=track[k].start, runB=Math.max(...track.slice(k,j+1).map(L=>L.end));
+    // only the caption right before the run (no gap of more than 2 frames) is held on; up to the next caption when it follows at once
+    if(prev && !R.has(prev) && prev.end>=runA-2){ const to=next && next.start<=runB+2 ? next.start : runB; if(to>prev.end) grow.push([prev,to]); }
+    k=j; }
+  for(const e of targets){
+    if(e.add) edits.items=edits.items.filter(x=>x!==e.add);
+    else if(e.edit){ Object.assign(e.edit, stampFor(e.L), {op:'delete', updated:now}); delete e.edit.text; delete e.edit.speaker; }
+    else edits.items.push({id:newId('ce'), op:'delete', ...stampFor(e.L), created:now}); }
+  for(const [p,to] of grow) setCapRange(p, p.start, to, now);
+  selCaps=new Set(); saveEdits(); rebuildCaps();
+  toast(`字幕を ${targets.length}件 外しました（⌘Z で戻す）`);
+}
+// show a caption's row in 字幕一覧 (the search is cleared so the row is there)
+function showRow(L){ if(curTab!=='caps') setTab('caps',true); const q=$('#capSearch'); if(q.value){ q.value=''; filterTranscript(); }
+  const k=caps.indexOf(L), row=k>=0?capRows[k]:null; if(!row) return null;
+  const sc=$('#capScroll'); userScrollAt=performance.now(); sc.scrollTop=Math.max(0,row.offsetTop-sc.clientHeight*0.3); return row; }
+function editInList(L){ if(!editsOK){ toast('手直しを保存するには、確認画面のサーバーを起動し直してください'); return; } openEditor(L,'edit',showRow(L)); }
+// S: split the caption at the playhead. The words are split where the cursor is (it starts at the same share of the words as of the time).
+// Stored as the caption's own time + new words (time / edit) and a new caption after it (add), with the same speaker.
+function openSplit(){
+  if(!editsOK){ toast('手直しを保存するには、確認画面のサーバーを起動し直してください'); return; }
+  const f=frameNow(), e=capAtHead(f);
+  if(!e){ toast('いまの位置に字幕はありません'); return; }
+  if(e.caption_kind!=='normal'){ toast('Point の字幕は分けられません'); return; }
+  if(f-e.start<MIN_CAP || e.end-f<MIN_CAP){ toast('字幕の端に近すぎます（分けると12コマ未満になります）'); return; }
+  const text=e.text||''; if(text.replace(/\s/g,'').length<2){ toast('文字が少なすぎて分けられません'); return; }
+  audio.pause(); closeEditor();
+  const row=showRow(e);
+  const el=document.createElement('div'); el.className=row?'redit edbox':'edbox';
+  el.innerHTML=`<div class="lbl">字幕を分ける <b>${tc(e.start)} 〜 ${tc(f)}</b> ｜ <b>${tc(f)} 〜 ${tc(e.end)}</b></div>
+    <textarea class="field" rows="${Math.max(1,Math.min(3,text.split('\n').length))}">${esc(text)}</textarea>
+    <div class="split"></div>
+    <div class="row"><span class="grow"></span><button class="btn sm" data-x="cancel">やめる</button><button class="btn sm primary" data-x="ok">分ける</button></div>
+    <div class="hint">分け目にカーソルを置いて Enter で確定、Esc でやめる（文字も直せます）</div>`;
+  const ta=el.querySelector('textarea'), pv=el.querySelector('.split');
+  const parts=()=>{ const p=ta.selectionStart; return [ta.value.slice(0,p), ta.value.slice(p)]; };
+  const one=t=>esc(cleanText(t).replace(/\n/g,'／'))||'（空）';
+  const show=()=>{ const [x,y]=parts(); pv.innerHTML=`前 <b>${one(x)}</b>　→　後 <b>${one(y)}</b>`; };
+  ['input','keyup','click','select','focus'].forEach(t=>ta.addEventListener(t,show));
+  const ok=()=>{ const [x,y]=parts(); if(splitCap(e,f,x,y)) closeEditor(); };
+  el.addEventListener('click',ev=>{ const b=ev.target.closest('[data-x]'); if(!b) return; if(b.dataset.x==='ok') ok(); else closeEditor(); });
+  ta.addEventListener('keydown',ev=>{
+    if(ev.isComposing || ev.keyCode===229) return;
+    if(ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); ok(); }
+    else if(ev.key==='Escape'){ ev.preventDefault(); ev.stopPropagation(); closeEditor(); } });
+  if(row){ row.classList.add('editing'); row.appendChild(el);
+    const sc=$('#capScroll'); const rb=row.offsetTop+row.offsetHeight; if(rb>sc.scrollTop+sc.clientHeight-8) smoothScroll(sc, Math.min(row.offsetTop-8, rb-sc.clientHeight+12)); }
+  else { $('#capFixMount').replaceChildren(el); $('#capFix').classList.add('open'); }
+  activeEditor={el,row,e};
+  const at=Math.max(1,Math.min(text.length-1,Math.round(text.length*(f-e.start)/(e.end-e.start))));
+  setTimeout(()=>{ ta.focus({preventScroll:true}); ta.setSelectionRange(at,at); show(); },30);
+}
+function splitCap(e, f, x, y){
+  const t1=cleanText(x), t2=cleanText(y);
+  if(!t1 || !t2){ toast('分け目の前と後に文字を残してください'); return false; }
+  if(t1.split('\n').length>2 || t2.split('\n').length>2){ toast('字幕は2行までです'); return false; }
+  if(t1.length>400 || t2.length>400){ toast('長すぎます'); return false; }
+  const now=new Date().toISOString(), b=e.end, spk=e.speaker==='S'?'S':'K';
+  setCapRange(e, e.start, f, now);                       // the first half keeps the caption itself (time)
+  if(e.add) Object.assign(e.add,{text:t1, updated:now});
+  else if(e.edit && e.edit.op==='edit') Object.assign(e.edit, stampFor(e.L), {text:t1, speaker:e.speaker||null, updated:now});
+  else if(t1!==e.origText) edits.items.push({id:newId('ce'), op:'edit', ...stampFor(e.L), text:t1, speaker:e.speaker||null, created:now});
+  edits.items.push({id:newId('ce'), op:'add', preview:M.name, plan:M.plan, cut_rev:M.cut_rev||'', frame:f, end_frame:b, tc:tc(f), end_tc:tc(b),
+    source:sourceAt(f), end_source:sourceAt(b-1), text:t2, speaker:spk, created:now});
+  saveEdits(); rebuildCaps(); toast('字幕を2つに分けました（⌘Z で戻す）'); return true;
+}
+// edit points: the cut points of the picture and where captions start / end
+function editPoints(){ const s=new Set(cutFrames); for(const L of caps){ if(L.deleted) continue; s.add(L.start); s.add(L.end); }
+  return [...s].filter(f=>f>0 && f<M.frames).sort((a,b)=>a-b); }
+function jumpEdit(dir){ const t=pickNext(editPoints(),dir); audio.pause();
+  if(t==null){ hud(dir>0?'この先に編集点はありません':'この前に編集点はありません'); return; }
+  seekFrame(t); hud(`${dir>0?'次':'前'}の編集点（${cutFrames.includes(t)?'カット点':'字幕の切れ目'}）　${tc(t)}`); }
+// A: the previous edit point to the playhead, D: the playhead to the next edit point; cut like a range (⌫)
+function trimTo(dir){ const f=frameNow(), pts=editPoints();
+  const a=dir<0?([...pts].reverse().find(x=>x<f) ?? 0):f, b=dir<0?f:(pts.find(x=>x>f) ?? M.frames);
+  if(b<=a){ toast('削る所がありません'); return; }
+  cutSpan(a,b); }
+// C: 1 → 1.5 → 2 → 1. Stopping the play once goes back to 1
+function updateRateUI(){ const r=audio.playbackRate; document.querySelectorAll('#rate button').forEach(x=>x.classList.toggle('on',+x.dataset.r===r));
+  const ch=$('#rateChip'); if(ch){ ch.textContent=`${r}×`; ch.classList.toggle('show',r!==1); } }
+function setRate(r){ audio.playbackRate=r; updateRateUI(); }
+function cycleRate(){ const r=audio.playbackRate, n=r===1?1.5:r===1.5?2:1; setRate(n); hud(`再生速度 ${n}倍`+(n!==1?'（止めると1倍に戻ります）':'')); }
+
+// ---------------------------------------------------------------- cuts restored / added on the page
+function joinAt(J){ const k=clips.findIndex(c=>c.start===J); if(k<=0) return null; const A=clips[k-1], B=clips[k];
+  const aEnd=A.src+(A.end-A.start)/FPS; const same=A.source_name===B.source_name;
+  return {J, A, B, aEnd, bSrc:B.src, gap:same?B.src-aEnd:null}; }
+let focusJ=null;   // the cut point just changed: the card stays on it while it is on screen
+function nearJoin(){ const f=frameNow(), span=spanS*FPS; let best=null;
+  if(focusJ!=null && Math.abs(focusJ-f)<=span && cutFrames.includes(focusJ)) return joinAt(focusJ);
+  for(const J of cutFrames){ const d=Math.abs(J-f); if(d<=span && (!best||d<best.d)) best={d,J}; } return best?joinAt(best.J):null; }
+function rangeSpans(a,b){ const out=[];
+  for(const c of clips){ if(c.end<=a||c.start>=b) continue; const lo=Math.max(a,c.start), hi=Math.min(b,c.end);
+    const s0=+(c.src+(lo-c.start)/FPS).toFixed(4), s1=+(c.src+(hi-c.start)/FPS).toFixed(4); const prev=out[out.length-1];
+    if(prev && prev.name===c.source_name && Math.abs(prev.s1-s0)<0.5/FPS) prev.s1=s1; else out.push({name:c.source_name, s0, s1}); }
+  return out.filter(r=>r.s1>r.s0); }
+let rn=(()=>{ try{ const v=JSON.parse(localStorage.getItem('review.restoreN')); return v&&v.tail&&v.head?v:{tail:10,head:10}; }catch{ return {tail:10,head:10}; } })();
+// put back N frames of what was cut at the cut point: the tail of the piece before, or the head of the piece after
+function restoreN(side){
+  if(!cutsOK){ toast(M.cut_error||'カットの手直しは使えません'); return; }
+  if(busy) return; const j=nearJoin(); if(!j) return;
+  let n=Math.round(+rn[side]); if(!(n>=1)){ toast('戻すコマ数を入れてください'); return; }
+  if(j.gap!=null){ const g=Math.round(j.gap*FPS); if(g<1){ toast('このカット点で切った所はありません'); return; }
+    if(n>g){ n=g; hud(`切った所は ${g}コマまでです`); } }
+  const k=n/FPS; const r=side==='tail'?{name:j.A.source_name, s0:j.aEnd, s1:j.aEnd+k}:{name:j.B.source_name, s0:Math.max(0,j.bSrc-k), s1:j.bSrc};
+  r.s0=+r.s0.toFixed(4); r.s1=+r.s1.toFixed(4);
+  addCut({op:'restore', ranges:[r], frame:j.J, label:side==='tail'?`前の終わりを ${n}コマ戻す`:`後ろの頭を ${n}コマ戻す`}, {listen:j.J+(side==='tail'?n:0)});
+}
+function restoreAll(){ const j=nearJoin(); if(!j||j.gap==null||j.gap<=0.5/FPS) return;
+  addCut({op:'restore', ranges:[{name:j.A.source_name, s0:+j.aEnd.toFixed(4), s1:+j.bSrc.toFixed(4)}], frame:j.J, label:`切った ${j.gap.toFixed(2)}秒を全部戻す`}, {listen:j.J}); }
+function cutRange(){
+  if(!cutsOK){ toast(M.cut_error||'カットの手直しは使えません'); return; }
+  if(rangeIn==null||rangeOut==null||rangeOut<=rangeIn){ toast('先に範囲の始めと終わり（I / O）を決めてください'); return; }
+  cutSpan(rangeIn, rangeOut);
+}
+// cut frames [a, b) out of picture and sound and close the gap (⌫ with I / O, A, D)
+function cutSpan(a, b){
+  if(!cutsOK){ toast(M.cut_error||'カットの手直しは使えません'); return; }
+  if(busy){ toast('反映中です。少し待ってください'); return; }
+  const rs=rangeSpans(a,b); if(!rs.length) return;
+  rangeIn=rangeOut=null; updateRange();
+  addCut({op:'cut', ranges:rs, frame:a, label:`${tc(a)} 〜 ${tc(b)} をカット（${((b-a)/FPS).toFixed(2)}秒）`}, {listen:a});
+}
+async function addCut(x, opt){
+  const now=new Date().toISOString();
+  const it={id:'cx'+Date.now().toString(36), preview:M.name, plan:M.plan, cut_rev:M.cut_rev||'', created:now, ...x};
+  await sendCuts([...cuts.items, it], opt, x.label);
+}
+async function sendCuts(items, opt, label){
+  if(busy) return; busy=true; document.body.classList.add('busy'); $('#busyChip').classList.add('show'); audio.pause(); renderCutCard();
+  const t0=performance.now();
+  try{
+    const r=await fetch('/api/cut-edits',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||r.status);
+    cuts={schema:d.schema, items:d.items, saved_at:d.saved_at}; record('cuts');
+    await applyManifest(d.manifest, opt);
+    const w=(d.manifest.cut_warnings||[]), ck=d.manifest.cut_check;
+    toast((label?label+'：':'')+(w.length?'一部は反映できませんでした':`反映しました（${((performance.now()-t0)/1000).toFixed(1)}秒）`)+(ck&&!ck.ok?'・ずれ検査 要確認':''));
+  }catch(e){ toast('反映できませんでした：'+e.message); }
+  finally{ busy=false; document.body.classList.remove('busy'); $('#busyChip').classList.remove('show'); renderCutCard(); renderEdits(); }
+}
+function undoCut(it){ sendCuts(cuts.items.filter(x=>x!==it), {keep:true}, 'カットの手直しを取り消しました'); }
+function cutItemFrame(it){
+  if(it.op==='place'){ const L=M.layers.find(L=>L.id===(it.target&&it.target.id)); return L?L.start:(sameTimeline(it)?it.frame:null); }
+  if(it.op==='retime') return sameTimeline(it)?it.frame:(frameFromSource(it.start_source,it.frame) ?? null);
+  const r=it.ranges&&it.ranges[0]; if(!r) return null;
+  if(sameTimeline(it)) return it.frame;
+  return frameFromSource({name:r.name, seconds:it.op==='restore'?r.s0:r.s1}, it.frame) ?? (it.preview===M.name?Math.min(M.frames-1,it.frame):null); }
+let lastCardKey='';
+function renderCutCard(){
+  const box=$('#cutCard'); if(!box||!M) return; const j=nearJoin(); const hasRange=rangeIn!=null&&rangeOut!=null&&rangeOut>rangeIn;
+  const key=[j&&j.J, hasRange, busy, cutsOK, M.cut_rev].join('|'); if(key===lastCardKey) return;
+  if(box.contains(document.activeElement) && document.activeElement.tagName==='INPUT') return;   // never re-draw under typing
+  lastCardKey=key;
+  const g=j&&j.gap!=null?Math.round(j.gap*FPS):null;
+  const num=side=>`<input class="num" type="number" min="1"${g?` max="${g}"`:''} step="1" value="${esc(String(rn[side]))}" data-n="${side}" aria-label="戻すコマ数">`;
+  let h='';
+  if(!cutsOK) h=`<span>${esc(M.cut_error||'カットの手直しは使えません')}</span>`;
+  else if(j){
+    const gap=g==null?'別の素材へ切り替え':(g>0?`${g}コマ（${j.gap.toFixed(2)}秒）切っています`:'前後がつながっています');
+    h=`<span class="cl" title="元素材 ${esc(j.A.source_name)} ${hms(j.aEnd)} → ${hms(j.bSrc)}">カット点 ${tc(j.J)}</span><span class="gap">${gap}</span>`;
+    if(g==null||g>0) h+=`<span class="grp" title="カット点の前の言葉の終わりを戻す（語尾が切れたとき）"><span>前の終わりを</span>${num('tail')}<span>コマ</span><button class="btn" data-c="tail">戻す</button></span>
+      <span class="grp" title="カット点の後ろの言葉の頭を戻す（頭が切れたとき）"><span>後ろの頭を</span>${num('head')}<span>コマ</span><button class="btn" data-c="head">戻す</button></span>
+      ${g?'<button class="btn sm" data-c="all" title="このカット点で切った所をすべて戻す">全部戻す</button>':''}`;
+  } else h='<span>近くにカット点はありません</span>';
+  h+=hasRange?'<button class="btn sm danger" data-c="range" title="選んだ範囲を映像と音声ごと切る（⌫）">範囲をカット</button>':(cutsOK?'<span class="gap">カットは範囲（I / O）を選んで ⌫、A / D で編集点まで</span>':'');
+  if(M.cut_rev && M.cut_check){ const c=M.cut_check; h+=c.ok?`<span class="chk ok" title="直した所より後ろ ${c.checked_after_last_change}個が同じだけずれ、字幕の空白なし・BGM の長さも足りています">ずれ検査 OK</span>`
+    :`<span class="chk ng" title="${esc((c.notes||[]).join('\n'))}">ずれ検査 要確認</span>`; }
+  box.innerHTML=h;
+}
+function onCutCard(e){ const b=e.target.closest('[data-c]'); if(!b) return; const c=b.dataset.c;
+  if(c==='all') restoreAll(); else if(c==='range') cutRange(); else restoreN(c); }
+function onCutInput(e){ const t=e.target; if(!t.dataset||!t.dataset.n) return; rn[t.dataset.n]=t.value; try{ localStorage.setItem('review.restoreN',JSON.stringify(rn)); }catch{} }
+function onCutKey(e){ const t=e.target; if(t.dataset&&t.dataset.n && e.key==='Enter'){ e.preventDefault(); onCutInput(e); restoreN(t.dataset.n); t.blur(); } }
+// the server's timeline for the current cut edits: rebuild everything that depends on frames
+async function applyManifest(m, opt){
+  opt=opt||{};
+  const keepSrc=sourceAt(frameNow()), keepF=frameNow();
+  for(const k of ['frames','clips','layers','camera','marks','audio','cut_rev','follow_rev','cut_warnings','cut_error','cut_check','retimed','caption_style']) M[k]=m[k];
+  for(const uid of [...assigned.keys()]) release(uid);
+  for(const [k,el] of domLayers){ el.remove(); } domLayers.clear();
+  loadTimeline();
+  await new Promise(res=>{ const url=mediaUrl(M.audio); if(audio.src.endsWith(url)){ res(); return; }
+    audio.addEventListener('loadedmetadata',res,{once:true}); audio.src=url; audio.load(); setTimeout(res,8000); });
+  rebuildCaps(); renderList(); lastCardKey=''; tlDirty=true; renderSelBar();
+  focusJ=opt.listen!=null && cutFrames.includes(opt.listen)?opt.listen:null;
+  let target=opt.listen!=null?opt.listen:frameFromSource(keepSrc,keepF);
+  if(target==null) target=keepF;
+  if(opt.listen!=null && !opt.keep){ seekFrame(target-Math.round(FPS*1.5)); playUntil=target+Math.round(FPS*1.5); audio.play(); }
+  else seekFrame(target);
+}
+function closeEditor(){ const ed=activeEditor; if(!ed) return; activeEditor=null;
+  if(ed.row){ ed.row.classList.remove('editing'); ed.el.remove(); }
+  else { $('#capFix').classList.remove('open'); setTimeout(()=>{ if(!activeEditor || activeEditor.row) $('#capFixMount').innerHTML=''; },360); } }
+function newCapAt(){ const f=rangeIn!=null?rangeIn:frameNow(); let b=rangeOut!=null&&rangeOut>f?rangeOut:Math.min(M.frames,f+Math.round(FPS*2));
+  const cur=currentCap(f); return {key:'new', start:f, end:Math.max(f+1,b), text:'', speaker:cur&&cur.speaker==='S'?'S':'K', caption_kind:'normal', origText:''}; }
+function openAdd(){ if(!editsOK){ toast('手直しを保存するには、確認画面のサーバーを起動し直してください'); return; } openEditor(newCapAt(),'add',null); }
+// one editor at a time: under 「いまの字幕」, or inside a row of 字幕一覧
+function openEditor(e, mode, row){
+  if(!e) return; if(!editsOK){ toast('手直しを保存するには、確認画面のサーバーを起動し直してください'); return; }
+  closeEditor(); audio.pause();
+  const emph=e.caption_kind==='emphasis';
+  const el=document.createElement('div'); el.className=row?'redit edbox':'edbox';
+  const where=mode==='add'?`字幕を足す <b>${tc(e.start)} 〜 ${tc(e.end)}</b>`:`${e.deleted?'出さない字幕':'字幕を打ち直す'} <b>${tc(e.start)}</b>`;
+  el.innerHTML=`<div class="lbl">${where}</div>
+    <textarea class="field" rows="${Math.max(1,Math.min(2,(e.text||'').split('\n').length))}" placeholder="字幕の文字（⇧Enter で2行目）">${esc(e.deleted?e.origText:(e.text||''))}</textarea>
+    <div class="row">${emph?'':`<div class="seg spk" role="group" aria-label="話者"><button data-s="K">${esc(spkName('K'))}</button><button data-s="S">${esc(spkName('S'))}</button></div>`}
+      <span class="grow"></span>
+      ${mode==='edit'&&(e.edit)?'<button class="btn sm" data-x="undo" title="この字幕の手直しを取り消す">元に戻す</button>':''}
+      ${mode==='edit'&&!e.deleted?`<button class="btn sm danger" data-x="hide" title="${e.add?'足した字幕を消す':'この字幕を出さない'}">${e.add?'消す':'出さない'}</button>`:''}</div>
+    <div class="row">${mode==='edit'&&!e.add?'<button class="btn sm" data-x="note" title="ここでは直さず、修正指示として Claude に渡す">指示として送る</button>':''}
+      <span class="grow"></span><button class="btn sm" data-x="cancel">やめる</button><button class="btn sm primary" data-x="ok">確定</button></div>
+    <div class="hint">Enter・⌘Enter で確定、⇧Enter で改行、Esc でやめる</div>`;
+  const ta=el.querySelector('textarea'); let spk=e.speaker==='S'?'S':'K';
+  const segs=[...el.querySelectorAll('.spk button')]; const paint=()=>segs.forEach(b=>b.classList.toggle('on',b.dataset.s===spk)); paint();
+  segs.forEach(b=>b.onclick=()=>{ spk=b.dataset.s; paint(); ta.focus(); });
+  const sp=()=>emph?null:spk;
+  const ok=()=>{ if(applyEdit(e,mode,ta.value,sp())) closeEditor(); };
+  el.addEventListener('click',ev=>{ const b=ev.target.closest('[data-x]'); if(!b) return; const x=b.dataset.x;
+    if(x==='ok') ok();
+    else if(x==='cancel') closeEditor();
+    else if(x==='hide'){ closeEditor(); hideCap(e); }
+    else if(x==='undo'){ const it=e.edit; closeEditor(); undoEdit(it); }
+    else if(x==='note'){ let t=cleanText(ta.value); if(!emph && spk!==(e.origSpeaker||'K')) t+=`（話者：${spkName(spk==='S'?'S':'K')}）`;
+      if(addComment({cap:e, text:t})) closeEditor(); } });
+  ta.addEventListener('input',()=>{ ta.rows=Math.max(1,Math.min(3,ta.value.split('\n').length)); });
+  ta.addEventListener('keydown',ev=>{
+    if(ev.isComposing || ev.keyCode===229) return;
+    if(ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); ok(); }
+    else if(ev.key==='Escape'){ ev.preventDefault(); ev.stopPropagation(); closeEditor(); } });
+  if(row){ row.classList.add('editing'); row.appendChild(el);
+    const sc=$('#capScroll'); const rb=row.offsetTop+row.offsetHeight; if(rb>sc.scrollTop+sc.clientHeight-8) smoothScroll(sc, Math.min(row.offsetTop-8, rb-sc.clientHeight+12)); }
+  else { $('#capFixMount').replaceChildren(el); $('#capFix').classList.add('open'); }
+  activeEditor={el,row,e};
+  setTimeout(()=>{ ta.focus({preventScroll:true}); ta.setSelectionRange(ta.value.length,ta.value.length); },30);
+}
+// 手直し tab
+function editFrame(it){ if(cuts.items.includes(it)) return cutItemFrame(it); const r=it._r; return r?(it.op==='time'?r.a:(r.L?r.L.start:r.a)):null; }
+// hand fixes of earlier versions, baked into this version's plan and checked one by one
+let carried={items:[]};
+const CARRY_KIND={time:'字幕の出入り', edit:'字幕の打ち直し', add:'字幕の追加', delete:'字幕を出さない', cut:'カット', restore:'カットを戻す', retime:'演出の出入り'};
+function carriedHtml(){
+  const its=carried.items; if(!its.length) return '';
+  const n=k=>its.filter(x=>x.check&&x.check.state===k).length;
+  const by={}; for(const x of its) (by[x.from]=by[x.from]||[]).push(x);
+  const tag=c=>!c?'':c.state==='ok'?'<span class="tag2 ok">反映済み</span>':c.state==='later'?'<span class="tag2">後の手直しで上書き</span>':`<span class="tag2 ng">要確認</span>`;
+  const rows=x=>`<div class="crow2"><button class="it-tc${x.frame==null?' na':''}" data-a="cseek" data-f="${x.frame??''}">${x.frame==null?'-':tc(x.frame)}</button>
+    <span class="tag2 fix">${CARRY_KIND[x.op]||x.op}</span><span class="t" title="${esc((x.check&&x.check.note)||'')}">${esc(String(x.label||'').replace(/\n/g,'／'))}</span>${tag(x.check)}</div>`;
+  return `<details class="carried"${n('ng')?' open':''}><summary>前の版から引き継いだ手直し ${its.length}件
+    <span class="tag2 ok">反映済み ${n('ok')}</span>${n('later')?`<span class="tag2">後の手直しで上書き ${n('later')}</span>`:''}${n('ng')?`<span class="tag2 ng">要確認 ${n('ng')}</span>`:''}</summary>
+    ${Object.keys(by).map(k=>`<div class="ctx">${esc(k)} で直した分（${by[k].length}件）</div>`+by[k].map(rows).join('')).join('')}</details>`;
+}
+function renderEdits(){
+  const box=$('#edits'); if(!box) return;
+  const mine=cuts.items.filter(it=>it.preview===M.name);
+  const items=[...edits.items, ...mine].sort((p,q)=>(editFrame(p)??1e12)-(editFrame(q)??1e12));
+  const live=edits.items.filter(it=>it._r && !it._r.applied).length+mine.length;
+  box.innerHTML=carriedHtml()+(items.map(it=>{ if(cuts.items.includes(it)) return cutRow(it); const r=it._r, fr=editFrame(it);
+    const state=!r?'<span class="tag2 gone">この版に該当なし</span>':(r.applied?'<span class="tag2">この版に反映済み</span>':'');
+    const other=it.preview!==M.name?`<span class="tag2">${esc(it.preview||'')} で直した</span>`:'';
+    const br=t=>esc(t||'').replace(/\n/g,'<span class="br">／</span>');
+    const who=s=>spkName(s==='S'?'S':'K');
+    let body='';
+    if(it.op==='edit') body=`<div class="fix"><s>${br(it.old_text)}</s> → <b>${br(it.text)}</b></div>`+(it.speaker && it.speaker!==(it.old_speaker||it.speaker)?`<div class="ctx">話者：${who(it.old_speaker)} → ${who(it.speaker)}</div>`:'');
+    else if(it.op==='delete') body=`<div class="fix"><s>${br(it.old_text)}</s>（出さない）</div>`;
+    else if(it.op==='time') body=`<div class="fix">${br(it.old_text)}</div><div class="ctx">${r&&r.L?tc(r.L._s)+' 〜 '+tc(r.L._e)+' → ':''}${r?tc(r.a)+' 〜 '+tc(r.b):''}</div>`;
+    else body=`<div class="fix"><b>${br(it.text)}</b></div><div class="ctx">${who(it.speaker)}・${fr!=null&&r?tc(r.a)+' 〜 '+tc(r.b):''}</div>`;
+    return `<div class="item${r&&!r.applied?'':' applied'}" data-id="${esc(it.id)}"><div class="head"><button class="it-tc${fr==null?' na':''}" data-a="seek">${fr==null?'-':tc(fr)}</button>
+      <span class="tag2 fix">${EDIT_LABEL[it.op]||it.op}</span>${other}${state}</div>${body}
+      <div class="tools"><button class="btn sm" data-a="retype"${fr==null||(r&&r.applied)?' disabled':''}>打ち直す</button><span class="grow"></span><button class="btn sm danger" data-a="undo">取り消す</button></div></div>`; }).join('')
+    || '<div class="empty">この版での手直しはまだありません<br>字幕一覧の行をダブルクリック（E）で打ち直し、時間軸の上の「カット点」でカットを戻す・足すことができます</div>');
+  const c=$('#editCount'); if(c.textContent!==String(live)){ c.textContent=live; c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); }
+  updateCountAll();
+}
+function cutRow(it){ const fr=editFrame(it);
+  const w=(M.cut_warnings||[]).length && it===cuts.items[cuts.items.length-1]?'<span class="tag2 warn">反映できなかった部分あり</span>':'';
+  if(it.op==='retime'||it.op==='place') return `<div class="item" data-id="${esc(it.id)}"><div class="head"><button class="it-tc${fr==null?' na':''}" data-a="seek">${fr==null?'-':tc(fr)}</button>
+    <span class="tag2 fix">${it.op==='place'?(it.target.kind==='thumbnail'?'サムネイルの位置と大きさ':'大型QRの位置と大きさ'):it.target.kind==='emphasis'?'強調の出入り':it.target.kind==='thumbnail'?'サムネイルの出入り':'大型QRの出入り'}</span>${w}</div><div class="fix">${esc(it.label||'')}</div>
+    <div class="tools"><button class="btn sm" data-a="listen"${fr==null?' disabled':''}>前後を見る</button><span class="grow"></span><button class="btn sm danger" data-a="undo">取り消す</button></div></div>`;
+  const r=it.ranges[0]; const len=it.ranges.reduce((s,x)=>s+(x.s1-x.s0),0);
+  return `<div class="item" data-id="${esc(it.id)}"><div class="head"><button class="it-tc${fr==null?' na':''}" data-a="seek">${fr==null?'-':tc(fr)}</button>
+    <span class="tag2 cut">${it.op==='restore'?'カットを戻す':'カット'}</span>${w}</div>
+    <div class="fix">${esc(it.label||'')}</div><div class="ctx">元素材 ${esc(r.name)} ${hms(r.s0)} 〜 ${hms(it.ranges[it.ranges.length-1].s1)}（${len.toFixed(2)}秒）</div>
+    <div class="tools"><button class="btn sm" data-a="listen"${fr==null?' disabled':''}>前後を聴く</button><span class="grow"></span><button class="btn sm danger" data-a="undo">取り消す</button></div></div>`; }
+function onEditClick(ev){
+  const b=ev.target.closest('[data-a]'); if(!b) return;
+  if(b.dataset.a==='cseek'){ if(b.dataset.f!=='') seekFrame(+b.dataset.f); return; }
+  const el=b.closest('.item');
+  const ci=cuts.items.find(x=>x.id===el.dataset.id);
+  if(ci){ const a=b.dataset.a, fr=editFrame(ci);
+    if(a==='seek' && fr!=null) seekFrame(fr);
+    if(a==='listen' && fr!=null){ seekFrame(fr-Math.round(FPS*1.5)); playUntil=fr+Math.round(FPS*1.5); audio.play(); }
+    if(a==='undo'){ if(!b.classList.contains('armed')){ b.classList.add('armed'); b.textContent='もう一度押すと取り消します'; clearTimeout(b._t);
+        b._t=setTimeout(()=>{ b.classList.remove('armed'); b.textContent='取り消す'; },3000); return; }
+      undoCut(ci); }
+    return; }
+  const it=edits.items.find(x=>x.id===el.dataset.id); if(!it) return;
+  const a=b.dataset.a, fr=editFrame(it);
+  if(a==='seek' && fr!=null) seekFrame(fr);
+  if(a==='retype' && fr!=null){ seekFrame(fr); const e=caps.find(c=>c.edit===it||c.add===it); if(e) openEditor(e,'edit',null); }
+  if(a==='undo'){ if(!b.classList.contains('armed')){ b.classList.add('armed'); b.textContent='もう一度押すと取り消します'; clearTimeout(b._t);
+      b._t=setTimeout(()=>{ b.classList.remove('armed'); b.textContent='取り消す'; },3000); return; }
+    undoEdit(it); }
+}
+function updateCountAll(){ const open=comments.items.filter(i=>i.status!=='done').length; const ne=edits.items.filter(it=>it._r && !it._r.applied).length+cuts.items.filter(it=>it.preview===M.name).length;
+  $('#countAll').textContent=`${comments.items.length}件・未対応 ${open}件`+(ne?`・手直し ${ne}件`:''); }
+function summary(){
+  const items=comments.items.filter(i=>i.status!=='done').sort((p,q)=>(commentFrame(p)??1e12)-(commentFrame(q)??1e12));
+  const lines=[`【修正指示】${M.title||''} プレビュー ${M.name}（${items.length}件）`, `保存先：${M.comments_file}`, ''];
+  items.forEach((it,k)=>{ const fr=commentFrame(it); const t=fr==null?it.tc:tc(fr)+(it.end_frame&&it.preview===M.name?'〜'+tc(it.end_frame):'');
+    let s=`${k+1}. [${t}]（元素材 ${it.source?hms(it.source.seconds):'-'}）`;
+    if(it.replacement!=null) s+=`字幕「${it.caption?.text||''}」→「${it.replacement}」`+(it.text?'。':'');
+    s+=it.text||''; if(it.replacement==null && it.caption?.text) s+=`（表示中の字幕：「${it.caption.text}」）`; lines.push(s); });
+  const ne=edits.items.filter(it=>it._r && !it._r.applied).length;
+  if(ne) lines.push('', `【字幕の手直し】${ne}件（画面で打ち直し・追加・非表示・出入り。次の版でも優先する）`, `保存先：${M.caption_edits_file||'planning/caption-edits.json'}`);
+  const nc=cuts.items.filter(it=>it.preview===M.name).length;
+  if(nc) lines.push('', `【カットの手直し】${nc}件（画面で反映済み。書き出し前に review_edits.py apply で計画に当てる）`, `保存先：${M.cut_edits_file||'planning/cut-edits.json'}`);
+  return lines.join('\n');
+}
+async function copySummary(){ const t=summary(); try{ await navigator.clipboard.writeText(t); toast('コピーしました'); }
+  catch{ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('コピーしました'); } }
+
+// ---------------------------------------------------------------- controls
+function setPlayLabel(){ const b=$('#bPlay'); const p=audio.paused; if(b._p===p) return; b._p=p; b.innerHTML=p?ICON.play:ICON.pause; b.setAttribute('aria-label',p?'再生':'停止');
+  b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
+function flash(){ const fl=$('#flash'); fl.innerHTML=audio.paused?ICON.pause:ICON.play; fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go'); }
+function togglePlay(){ if(audio.paused) audio.play(); else audio.pause(); flash(); render(true); }
+function pause(){ if(!audio.paused){ audio.pause(); flash(); } }
+function stepSize(v){ return String(v).endsWith('s') ? parseFloat(v)*Math.round(FPS) : +v; }
+function step(n){ audio.pause(); seekFrame(frameNow()+n); }
+function pickNext(list, dir){ const f=frameNow(); return dir>0 ? list.find(x=>x>f) : [...list].reverse().find(x=>x<f); }
+function jumpCaption(dir){ const t=pickNext(capStarts,dir); audio.pause(); if(t==null){ hud(dir>0?'最後の字幕です':'最初の字幕です'); return; } seekFrame(t); hud((dir>0?'次の字幕　':'前の字幕　')+tc(t)); }
+function jumpCut(dir){ const t=pickNext(cutFrames,dir); if(t==null){ hud('この先にカット点はありません'); return; } seekFrame(t); hud((dir>0?'次のカット点　':'前のカット点　')+tc(t)); }
+function jumpMark(dir){ const t=pickNext(markStarts,dir); if(t==null){ hud('この先に演出はありません'); return; } seekFrame(t); const m=M.marks.find(x=>x.start===t); hud(`${(m&&m.label||'演出').replace(/\n/g,' ')}　${tc(t)}`); }
+function jumpComment(dir){ const fs=[...new Set(comments.items.map(commentFrame).filter(x=>x!=null))].sort((a,b)=>a-b); const t=pickNext(fs,dir);
+  if(t==null){ hud('この先に修正指示はありません'); return; } seekFrame(t); hud((dir>0?'次の指示　':'前の指示　')+tc(t));
+  const it=comments.items.find(x=>commentFrame(x)===t); const el=it&&itemEls.get(itemKey(it));
+  if(el){ if(curTab==='notes'){ const sc=$('#listScroll'); smoothScroll(sc, el.offsetTop-sc.clientHeight*.25); }
+    el.classList.add('flash'); clearTimeout(el._fl); el._fl=setTimeout(()=>el.classList.remove('flash'),1200); } }
+function openStyles(){ const sh=$('#stylesSheet'), fr=sh.querySelector('iframe');
+  fr.loading='eager';   // the sheet is still below the screen while it slides up: a lazy frame would not start loading
+  if(!fr.getAttribute('src')) fr.src=window.MIRU_STYLES||'/styles?embed=1'; else try{ fr.contentWindow.location.reload(); }catch{}   // re-read: rejected ones drop out (MIRU: the channel's list on the site)
+  audio.pause(); sh.classList.add('open'); sh.setAttribute('aria-hidden','false'); setTimeout(()=>{ try{ fr.contentWindow.focus(); }catch{} },400); }
+function closeStyles(){ const sh=$('#stylesSheet'); sh.classList.remove('open'); sh.setAttribute('aria-hidden','true'); }
+async function copyTc(){ const t=tc(frameNow()); const b=$('#tcCopy');
+  try{ await navigator.clipboard.writeText(t); }
+  catch{ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  b.classList.add('done'); b.querySelector('span').textContent='コピーしました'; clearTimeout(b._t);
+  b._t=setTimeout(()=>{ b.classList.remove('done'); b.querySelector('span').textContent='コピー'; },1400); toast(`${t} をコピーしました`); }
+let stageScale=1;
+// the whole page fits the window without scrolling up and down (2026-10-21): the picture takes the height the controls
+// and the timeline leave (measured, so a wrapped line or a taller timeline is counted)
+const FOLDS=['header','transport','nav','cut','ov','right'];
+let folds=new Set(); try{ folds=new Set(JSON.parse(localStorage.getItem('review-folds')||'[]').filter(k=>FOLDS.includes(k))); }catch{}
+function applyFolds(){ const root=document.documentElement; for(const k of FOLDS) root.classList.toggle('fold-'+k, folds.has(k));
+  document.querySelectorAll('#foldMenu [data-fold]').forEach(c=>{ c.checked=!folds.has(c.dataset.fold); });
+  try{ localStorage.setItem('review-folds', JSON.stringify([...folds])); }catch{}
+  requestAnimationFrame(()=>{ fitLayout(); if(typeof fitStage==='function' && typeof M!=='undefined' && M) fitStage(); tlDirty=true; }); }
+let lastFolds=null;
+function toggleFoldAll(){ const all=FOLDS.every(k=>folds.has(k));
+  if(all){ folds=new Set(lastFolds&&lastFolds.length<FOLDS.length?lastFolds:[]); hud('しまった所を出しました'); }
+  else { lastFolds=[...folds]; folds=new Set(FOLDS); hud('タイムライン以外をしまいました（H で戻す・右下のボタンで選ぶ）'); }
+  applyFolds(); }
+function setupFolds(){
+  $('#foldBtn').onclick=e=>{ e.stopPropagation(); $('#foldMenu').classList.toggle('open'); };
+  $('#foldMenu').addEventListener('click',e=>e.stopPropagation());
+  document.addEventListener('click',()=>$('#foldMenu').classList.remove('open'));
+  document.querySelectorAll('#foldMenu [data-fold]').forEach(c=>c.onchange=()=>{ if(c.checked) folds.delete(c.dataset.fold); else folds.add(c.dataset.fold); applyFolds(); });
+  document.querySelectorAll('#foldMenu [data-foldall]').forEach(b=>b.onclick=()=>{ folds=new Set(b.dataset.foldall==='1'?FOLDS:[]); applyFolds(); });
+  applyFolds(); }
+function fitLayout(){
+  if(innerWidth<=960){ document.documentElement.style.removeProperty('--stage-max-h'); return; }
+  const left=$('#left'); if(!left) return; const cs=getComputedStyle(document.documentElement);
+  const gap=parseFloat(cs.getPropertyValue('--gap'))||14, head=parseFloat(cs.getPropertyValue('--header-h'))||56;
+  const others=[...left.children].filter(el=>el.id!=='stageWrap' && getComputedStyle(el).display!=='none');
+  const used=others.reduce((n,el)=>n+el.getBoundingClientRect().height,0)+gap*others.length;
+  const avail=Math.floor(innerHeight-head-gap-18-used-10);
+  document.documentElement.style.setProperty('--stage-max-h',Math.max(180,avail)+'px'); }
+function fitStage(){ const w=$('#stageWrap').clientWidth, h=$('#stageWrap').clientHeight; const s=Math.min(w/M.width,h/M.height); stageScale=s;
+  $('#stage').style.transform=`translate(${(w-M.width*s)/2}px,${(h-M.height*s)/2}px) scale(${s})`; }
+function setTab(t, animate){
+  curTab=t; $('#tabs').dataset.tab=t; document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+  const panes={caps:$('#paneCaps'), notes:$('#paneNotes'), edits:$('#paneEdits')}, order=['caps','notes','edits'];
+  const prev=setTab._prev??0, idx=order.indexOf(t); setTab._prev=idx;
+  for(const [k,el] of Object.entries(panes)) el.hidden=k!==t; const show=panes[t];
+  if(animate) anim(show,[{opacity:0,transform:`translateX(${idx<prev?-14:14}px)`},{opacity:1,transform:'none'}],{duration:380});
+  try{ localStorage.setItem('review.tab',t); }catch{}
+  if(t==="caps"){ userScrollAt=0; lastAnchor=-1; updateTranscript(frameNow()); }
+}
+function toggleHelp(force){ const h=$('#help'); const open=force??!h.classList.contains('open'); h.classList.toggle('open',open); }
+function hideSkeleton(){ ready=true; document.body.classList.add('ready'); const sk=$('#skeleton'); sk.classList.add('out'); setTimeout(()=>sk.remove(),800); }
+function waitReady(){ return new Promise(res=>{ const t0=performance.now();
+  const chk=()=>{ const s=assigned.get(clips[Math.max(0,bsearch(clips,frameNow()))].uid);
+    if((audio.readyState>=3 && s && s.el.readyState>=2) || performance.now()-t0>15000) res(); else setTimeout(chk,80); }; chk(); }); }
+
+function loadTimeline(){
+  clips.length=0; vlayers.length=0; olayers.length=0; captionLayers.length=0; layerByCap.clear(); cutFrames=[];
+  M.clips.forEach(c=>clips.push({...c, uid:'c'+c.i+'-'+(M.cut_rev||''), isBase:true}));
+  for(const L of M.layers){ L._s=L.start; L._e=L.end;
+    if(L.parked) continue;      // a caption waiting under a screen recording (shown when the screen recording is moved)
+    if(L.type==='video') vlayers.push({uid:'l'+L.i+'-'+(M.cut_rev||''), media:L.media, src:L.src, start:L.start, end:L.end, isBase:false, layer:L}); else olayers.push(L);
+    if(L.role==='caption'){ captionLayers.push(L); if(!layerByCap.has(L.caption_id||L.id)) layerByCap.set(L.caption_id||L.id,L); } }
+  captionLayers.sort((a,b)=>a.start-b.start||a.i-b.i); M.camera.sort((a,b)=>a.start-b.start);
+  for(let i=1;i<clips.length;i++){ const p=clips[i-1], c=clips[i]; if(p.media!==c.media || Math.abs(p.src+(p.end-p.start)/FPS-c.src)>1.5/FPS) cutFrames.push(c.start); }
+  markStarts=[...new Set(M.marks.map(m=>m.start))].sort((a,b)=>a-b);
+  setupFlat();
+}
+async function init(){
+  M=await fetch('/api/manifest').then(r=>{ if(!r.ok) throw new Error('manifest '+r.status); return r.json(); }); FPS=M.fps_num/M.fps_den;
+  document.querySelectorAll('[data-spk]').forEach(el=>{ el.textContent=spkName(el.dataset.spk); });
+  M.title=M.case.split('/').pop(); document.title=`${M.title} ${M.name} | 編集プレビュー`; $('#title').textContent=M.title; $('#ver').textContent='プレビュー '+M.name;
+  $('#path').textContent='保存先：'+M.comments_file;
+  const sel=$('#verSel'); for(const p of M.previews){ const o=document.createElement('option'); o.value=p; o.textContent='プレビュー '+p; o.selected=p===M.name; sel.appendChild(o); }
+  if(M.previews.length>1){ sel.hidden=false; $('#ver').hidden=true; }
+  sel.onchange=async()=>{ await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:sel.value})}); location.reload(); };
+  loadTimeline();
+  comments=await fetch('/api/comments').then(r=>r.json()); comments.items=comments.items||[];
+  try{ const r=await fetch('/api/caption-edits'); if(!r.ok) throw new Error(r.status); edits=await r.json(); edits.items=edits.items||[]; }
+  catch{ editsOK=false; edits={items:[]}; }
+  try{ const r=await fetch('/api/cut-edits'); if(!r.ok) throw new Error(r.status); cuts=await r.json(); cuts.items=cuts.items||[]; }
+  catch{ cutsOK=false; cuts={items:[]}; }
+  try{ const r=await fetch('/api/carried'); carried=r.ok?await r.json():{items:[]}; carried.items=carried.items||[]; }catch{ carried={items:[]}; }
+  if(M.cut_error){ cutsOK=false; toast('カットの手直しを当てられませんでした：'+M.cut_error); }
+  remember('comments'); remember('edits'); remember('cuts');
+  // a back swipe (Safari) or the back button asks first instead of leaving the page mid-edit
+  history.pushState({stay:1},'',location.href);
+  addEventListener('popstate',()=>{ if(confirm('この画面を離れますか？（手直しは保存されています）')) history.back(); else history.pushState({stay:1},'',location.href); });
+  rebuildCaps();
+  loadPalette();
+  audio=new Audio(mediaUrl(M.audio)); audio.preload='auto';
+  ['ended','pause','play'].forEach(ev=>audio.addEventListener(ev,()=>{ setPlayLabel(); tlDirty=true; }));
+  audio.addEventListener('pause',()=>{ playUntil=null; if(audio.playbackRate!==1) setRate(1); });   // the automatic stop after a join only lasts for that one play; the speed goes back to 1
+  audio.addEventListener('ratechange',updateRateUI);
+  setPlayLabel();
+  window.UI={tc:$('#tc'), src:$('#srcTc')};
+
+  // controls
+  document.querySelectorAll('#noteFilter button').forEach(b=>b.onclick=()=>setNoteFilter(b.dataset.f));
+  document.querySelectorAll('#noteFilter button').forEach(b=>b.classList.toggle('on',b.dataset.f===noteFilter));
+  $('#bPlay').onclick=togglePlay; $('#stageWrap').onclick=togglePlay;
+  document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>step(stepSize(b.dataset.step)));
+  document.querySelectorAll('#rate button').forEach(b=>b.onclick=()=>setRate(+b.dataset.r));
+  document.querySelectorAll('.navg button').forEach(b=>{ b.innerHTML=+b.dataset.d<0?ICON.left:ICON.right;
+    b.onclick=()=>{ const d=+b.dataset.d; ({cap:jumpCaption,cut:jumpCut,mark:jumpMark,note:jumpComment})[b.dataset.nav](d); }; });
+  $('#tcCopy').onclick=copyTc;
+  $('#stylesOpen').onclick=openStyles;
+  $('#stylesSheet').addEventListener('click',e=>{ if(e.target.id==='stylesSheet') closeStyles(); });
+  window.addEventListener('message',e=>{ if(e.origin!==location.origin) return; if(e.data&&e.data.type==='styles:close') closeStyles(); });
+  $('#zIn').onclick=()=>zoomBy(1); $('#zOut').onclick=()=>zoomBy(-1); setZoom(spanS);
+  $('#cutCard').addEventListener('click',onCutCard); $('#cutCard').addEventListener('input',onCutInput); $('#cutCard').addEventListener('keydown',onCutKey);
+  $('#selBar').addEventListener('click',onSelBar);
+  setupPlaceBox();
+  $('#bUndo').onclick=undo; $('#bRedo').onclick=redo; updateHist();
+  $('#capFrom').onclick=capFromHere; $('#nextFrom').onclick=nextFromHere;
+  $('#fixCap').onclick=openCapFix; $('#addCap').onclick=openAdd;
+  $('#nowCap .txt').addEventListener('dblclick',()=>{ getSelection()?.removeAllRanges(); openCapFix(); });
+  $('#edits').addEventListener('click',onEditClick);
+  $('#setIn').onclick=()=>{ rangeIn=frameNow(); if(rangeOut!=null&&rangeOut<=rangeIn) rangeOut=null; updateRange(); tlDirty=true; };
+  $('#setOut').onclick=()=>{ if(rangeIn==null) rangeIn=frameNow(); const f=frameNow(); if(f>rangeIn) rangeOut=f; else toast('終わりは始めより後にしてください'); updateRange(); tlDirty=true; };
+  $('#clearRange').onclick=()=>{ rangeIn=rangeOut=null; updateRange(); tlDirty=true; };
+  $('#add').onclick=()=>addComment(); $('#copy').onclick=copySummary;
+  $('#list').addEventListener('click',onItemClick);
+  document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{ if(b.dataset.tab!==curTab) setTab(b.dataset.tab,true); });
+  $('#bHelp').onclick=e=>{ e.stopPropagation(); toggleHelp(); };
+  document.addEventListener('click',e=>{ if(!e.target.closest('#help')) toggleHelp(false); });
+  // ⌘Enter: add the note, leave the box and play on
+  $('#note').addEventListener('keydown',e=>{ if(e.isComposing||e.keyCode===229) return;
+    if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){ e.preventDefault(); if(addComment()){ $('#note').blur(); if(audio.paused) togglePlay(); } } });
+
+  document.addEventListener('keydown',e=>{
+    if(e.isComposing || e.keyCode===229) return;      // the IME is converting: the keys are its own
+    const t=e.target, tag=t.tagName;
+    if(tag==='TEXTAREA'||tag==='INPUT'||tag==='SELECT'||t.isContentEditable){ if(e.key==='Escape') t.blur(); return; }
+    if((e.metaKey||e.ctrlKey) && e.code==='KeyZ' && ready){ e.preventDefault(); if(e.shiftKey) redo(); else undo(); return; }
+    if((e.metaKey||e.ctrlKey) && e.code==='KeyY' && ready){ e.preventDefault(); redo(); return; }
+    if(e.metaKey||e.ctrlKey||e.altKey||!ready) return;
+    const k=e.key, c=e.code, one=Math.round(FPS); let ok=true;
+    if(k===' '||c==='Space') togglePlay();
+    else if(c==='KeyK') pause();
+    else if(k==='ArrowLeft') step(e.shiftKey?-one:-1);
+    else if(k==='ArrowRight') step(e.shiftKey?one:1);
+    else if(k==='ArrowUp') e.shiftKey?jumpCut(-1):jumpEdit(-1);
+    else if(k==='ArrowDown') e.shiftKey?jumpCut(1):jumpEdit(1);
+    else if(c==='KeyJ') step(-5*one); else if(c==='KeyL') step(5*one);
+    else if(c==='KeyQ') removeCaps();
+    else if(c==='KeyS') openSplit();
+    else if(c==='KeyD') trimTo(1);
+    else if(c==='KeyA' && e.shiftKey) openAdd();
+    else if(c==='KeyA') trimTo(-1);
+    else if(c==='KeyV') toggleFlat();
+    else if(c==='KeyH') toggleFoldAll();
+    else if(c==='KeyC' && e.shiftKey) copyTc();
+    else if(c==='KeyC') cycleRate();
+    else if(c==='KeyX'){ audio.pause(); $('#note').focus(); }
+    else if(c==='KeyZ'){ if(audio.paused) togglePlay(); }
+    else if(c==='KeyI' && e.shiftKey) (sel?selFromHere:capFromHere)();
+    else if(c==='KeyO' && e.shiftKey) (sel?selToHere:nextFromHere)();
+    else if(k==='Backspace'||k==='Delete') cutRange();
+    else if(k==='-'||k==='ー'||c==='Minus') zoomBy(-1);
+    else if(k==='='||k==='+'||k==='^'||k==='＋'||c==='Equal'||c==='Semicolon') zoomBy(1);
+    else if(c==='KeyE') openCapFix();
+    else if(c==='KeyI') $('#setIn').click(); else if(c==='KeyO') $('#setOut').click();
+    else if(k==='['||k==='「') jumpMark(-1); else if(k===']'||k==='」') jumpMark(1);
+    else if(k===','||k==='、') jumpComment(-1); else if(k==='.'||k==='。') jumpComment(1);
+    else if(k==='?'||k==='？') toggleHelp();
+    else if(k==='Escape' && $('#stylesSheet').classList.contains('open')) closeStyles();
+    else if(k==='Escape'){ toggleHelp(false); if(activeEditor) closeEditor(); else if(selCaps.size){ selCaps=new Set(); tlDirty=true; hud('選択を外しました'); } else if(sel){ sel=null; renderSelBar(); tlDirty=true; } else if(rangeIn!=null){ rangeIn=rangeOut=null; updateRange(); tlDirty=true; } }
+    else ok=false;
+    if(ok) e.preventDefault();
+  });
+  // a focused button must not also be "clicked" by Space
+  document.addEventListener('keyup',e=>{ if((e.key===' ')&&e.target.tagName==='BUTTON') e.preventDefault(); });
+
+  buildTranscript(); setupCanvasInput();
+  let tab='caps'; try{ tab=localStorage.getItem('review.tab')||'caps'; }catch{} setTab(['notes','edits'].includes(tab)?tab:'caps',false);
+  new ResizeObserver(()=>{ fitStage(); tlDirty=true; render(true); }).observe($('#stageWrap')); fitStage();
+  { const ro=new ResizeObserver(()=>fitLayout()); for(const el of $('#left').children) if(el.id!=='stageWrap') ro.observe(el);
+    addEventListener('resize',fitLayout); fitLayout(); setupFolds(); }
+  new ResizeObserver(()=>{ tlDirty=true; }).observe($('#timeline'));
+  // refresh notes written by the agent (status/reply) without reloading
+  setInterval(async()=>{ if(document.activeElement && ['TEXTAREA','INPUT'].includes(document.activeElement.tagName)) return;
+    try{ const d=await fetch('/api/comments').then(r=>r.json()); if(d.saved_at && d.saved_at!==comments.saved_at && !saveTimer){ comments=d; comments.items=comments.items||[]; remember('comments'); renderList(); } }catch{}
+    if(editsOK && !activeEditor && !editsBusy) try{ const d=await fetch('/api/caption-edits').then(r=>r.json()); if(d.saved_at && d.saved_at!==edits.saved_at){ edits=d; edits.items=edits.items||[]; remember('edits'); rebuildCaps(); } }catch{}
+    if(cutsOK && !busy) try{ const d=await fetch('/api/cut-edits').then(r=>r.json()); if(d.saved_at && d.saved_at!==cuts.saved_at){ cuts=d; cuts.items=cuts.items||[];
+      remember('cuts'); const m=await fetch('/api/manifest').then(r=>r.json()); if((m.cut_rev||'')!==(M.cut_rev||'')) await applyManifest(m,{}); renderEdits(); } }catch{}
+    try{ const m=await fetch('/api/previews').then(r=>r.json()); const nv=m.previews.filter(p=>!M.previews.includes(p));
+      if(nv.length){ const b=$('#newVer'); b.textContent=`新しいプレビュー ${nv[nv.length-1]} を開く`; b.style.display='inline-flex';
+        b.onclick=async()=>{ await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv[nv.length-1]})}); location.reload(); }; } }catch{} }, 5000);
+  updateRange(); seekFrame(+(new URLSearchParams(location.search).get('f'))||0); requestAnimationFrame(loop);
+  await waitReady();
+  renderList(); hideSkeleton();
+}
+// the hosted site (MIRU) installs its data bridge first; locally this starts at once
+(window.MIRU_READY||Promise.resolve()).then(init).catch(e=>{ const box=$('#skErr'); if(box){ box.hidden=false; box.textContent='読み込めませんでした：'+e.message; } console.error(e); });
+</script>
+</body>
+</html>
