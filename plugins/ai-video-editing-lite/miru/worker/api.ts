@@ -695,6 +695,30 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
     }
     if (sub === "thumb" && m === "GET") return serveObject(env.MEDIA, `v/${v.id}/thumb.jpg`, req);
 
+    // 再生の記録（2026-10-23「字幕が途中で消える・音待ち・映像が止まる」の原因を本番で確かめるため）。
+    // ページが自分で記録して送る。動画ごとの置き場に置き、編集者以上が一覧・中身を読める
+    if (sub === "diag") {
+      const name = seg[4];
+      if (!name && m === "POST") {
+        const len = Number(req.headers.get("content-length") ?? 0);
+        if (len > 1_000_000) return json({ error: "記録は 1MB までです" }, 413);
+        const body = await req.text();
+        if (body.length > 1_000_000) return json({ error: "記録は 1MB までです" }, 413);
+        try { JSON.parse(body); } catch { return json({ error: "JSON ではありません" }, 400); }
+        const key = `${new Date().toISOString().replace(/[:.]/g, "-")}-${newId().slice(0, 6)}.json`;
+        await env.MEDIA.put(`v/${v.id}/diag/${key}`, body, { httpMetadata: { contentType: "application/json" } });
+        return json({ ok: true, name: key });
+      }
+      need("editor");
+      if (!name && m === "GET") {
+        const r = await env.MEDIA.list({ prefix: `v/${v.id}/diag/` });
+        const items = r.objects.map((o) => ({ name: o.key.split("/").pop(), size: o.size })).sort((a, b) => (a.name! < b.name! ? 1 : -1)).slice(0, 100);
+        return json({ items });
+      }
+      if (name && m === "GET" && /^[\w.-]{10,80}\.json$/.test(name)) return serveObject(env.MEDIA, `v/${v.id}/diag/${name}`, req);
+      return json({ error: "ありません" }, 404);
+    }
+
     // 修正指示
     if (sub === "notes") {
       const nid = seg[4];

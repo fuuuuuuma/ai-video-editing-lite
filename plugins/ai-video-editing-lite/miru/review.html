@@ -771,7 +771,8 @@ function placeVideoLayer(item, s, f){
 // ---------------------------------------------------------------- overlay layers (engine)
 function ensureDom(L){
   let el=domLayers.get(L.i); if(el) return el;
-  if(L.type==='image'){ el=new Image(); el.decoding='async'; el.src=mediaUrl(L.media); if(L.width) el.style.width=L.width+'px'; if(L.height) el.style.height=L.height+'px';
+  // the picture shown in a moment goes first: background reads must never make it wait (2026-10-23 MIRU: 15–18 s)
+  if(L.type==='image'){ el=new Image(); el.decoding='async'; el.fetchPriority='high'; el.src=mediaUrl(L.media); if(L.width) el.style.width=L.width+'px'; if(L.height) el.style.height=L.height+'px';
     // a picture that did not arrive (a dropped request) is asked for once more, not left blank for the rest of the play
     el.onerror=()=>{ if(el.dataset.retried) return; el.dataset.retried='1'; setTimeout(()=>{ el.src=mediaUrl(L.media)+'&r='+Date.now(); },300); }; }
   else { el=document.createElement('div'); el.style.width=L.width+'px'; el.style.height=L.height+'px'; el.style.background=L.color||'#fff'; }

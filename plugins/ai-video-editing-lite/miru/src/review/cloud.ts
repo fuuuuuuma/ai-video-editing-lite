@@ -9,6 +9,7 @@
 import { applyAll, remapSpans } from "./edits";
 import { PlanMixer, type AudioIndex, type MixPlan } from "./mixer";
 import { renderCaption, type CaptionStyle } from "./caption";
+import { mark, startDiag } from "./diag";
 
 declare global { interface Window { MIRU_MEDIA?: string; MIRU_CLOUD?: number; __miruStart?: () => void; Audio: typeof Audio } }
 
@@ -31,7 +32,9 @@ const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body)
 
 async function boot() {
   if (!vid) { location.replace("/"); return; }
+  mark("boot");
   const video = await api(`/api/videos/${enc(vid)}`);
+  mark("video_info");
   const ready: { name: string }[] = video.versions.filter((x: Json) => x.ready);
   if (!ready.length) throw new Error("この動画にはまだプレビューがありません");
   const ver = ready.some((x) => x.name === q.get("ver")) ? q.get("ver")! : ready[0].name;
@@ -47,6 +50,7 @@ async function boot() {
     realFetch(base + "carried.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : { items: [] })),
     realFetch(base + "caption-style.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)) as Promise<CaptionStyle | null>,
   ]);
+  mark("files");
   document.title = `${video.video.title} ${ver} | MIRU`;
 
   // ── 手直しを当てた時間軸（手元のサーバーの edited_manifest と同じ形）──
@@ -226,36 +230,46 @@ async function boot() {
   // 先に今の手直しを読んでおく（最初の /api/manifest で使い、ページが続けて取りに来る分にもそのまま返す）
   [cuts, caps] = await Promise.all([api(`/api/videos/${enc(vid)}/edits/cut`), api(`/api/videos/${enc(vid)}/edits/caption`)]);
   bootCuts = cuts; bootCaps = caps;
+  mark("edits");
   window.__miruStart?.();
+  startDiag(vid);
   prefetchImages(manifest, base, ver);
 }
 let bootCuts: Json | null = null, bootCaps: Json | null = null;
 
-/** 字幕・強調などの画像を、出る順に裏で先に読んでおく（2026-10-23「テロップの表示が間に合わない」）。
- *  ページは出る 5 秒前に 1 枚ずつ取りに行くので、通信が遅いと間に合わなかった。ページと同じ URL で取り、ブラウザの
- *  キャッシュに入れておく（画像を開いたまま持たない: 数百枚を展開するとメモリが足りない）。再生を邪魔しないよう 4 本ずつ。 */
+/** 字幕・強調などの画像を、再生位置の少し先（1 分）だけ、優先度を低くして裏で読んでおく。
+ *  2026-10-23 の再生の記録で確定: 前の先読み（優先度の高い fetch を 4 本ずつ、全部の画像 600 本以上を 55 秒続けて）が、
+ *  画面に今出す字幕画像（<img>・優先度が低い）の読み込みを Chrome に 15〜18 秒後回しにさせ、字幕が出なくなっていた。
+ *  いまは: 優先度「低」・同時に 2 本まで・再生位置から 1 分先までに出る画像だけ。画面の字幕画像はページ側で優先度「高」。
+ *  画像を開いたまま持たない（数百枚を展開するとメモリが足りない）。ページと同じ URL で取り、ブラウザのキャッシュに入れるだけ。 */
 function prefetchImages(manifest: Json, base: string, ver: string) {
   const v = encodeURIComponent(`${ver}-${manifest.built_at ?? ""}`);
   const flat = !!manifest.flat;
   const live = (L: Json) => L.role === "caption" || L.role === "header" || L.role === "small_qr" || /^(qr-q|qrbg-|thumb)/.test(String(L.id ?? ""));
-  const keys: string[] = [];
-  const seen = new Set<string>();
-  for (const L of [...(manifest.layers as Json[])].sort((a, b) => a.start - b.start)) {
-    if (L.type !== "image" || !L.media || seen.has(L.media) || (flat && !live(L))) continue;
-    seen.add(L.media); keys.push(L.media);
+  const firstAt = new Map<string, number>();
+  for (const L of manifest.layers as Json[]) {
+    if (L.type !== "image" || !L.media || (flat && !live(L))) continue;
+    if (!firstAt.has(L.media) || L.start < firstAt.get(L.media)!) firstAt.set(L.media, L.start);
   }
-  const start = Number(q.get("f") ?? 0) || 0;            // 途中から開いたときは、そこから先を先に
-  const at = (manifest.layers as Json[]).reduce((m: Map<string, number>, L: Json) => (m.has(L.media) ? m : m.set(L.media, L.start)), new Map());
-  keys.sort((a, b) => ((at.get(a) ?? 0) < start ? 1 : 0) - ((at.get(b) ?? 0) < start ? 1 : 0));
-  let i = 0;
-  const next = async (): Promise<void> => {
-    while (i < keys.length) {
-      const k = keys[i++];
-      try { const r = await realFetch(`${base}media/${k}?v=${v}`, { credentials: "same-origin" }); await r.arrayBuffer(); } catch { /* 次へ */ }
+  const order = [...firstAt.entries()].sort((a, b) => a[1] - b[1]);
+  const fps = (Number(manifest.fps_num) || 30) / (Number(manifest.fps_den) || 1);
+  const AHEAD = 60 * fps, PARALLEL = 2;
+  const done = new Set<string>();
+  let running = 0;
+  const now = (): number => { try { return frameNow(); } catch { return 0; } };
+  const pump = () => {
+    const f = now();
+    for (const [k, at] of order) {
+      if (running >= PARALLEL) return;
+      if (done.has(k) || at < f - 30 || at > f + AHEAD) continue;
+      done.add(k); running++;
+      realFetch(`${base}media/${k}?v=${v}`, { credentials: "same-origin", priority: "low" } as RequestInit)
+        .then((r) => r.arrayBuffer()).catch(() => { done.delete(k); }).finally(() => { running--; pump(); });
     }
   };
-  setTimeout(() => { for (let n = 0; n < 4; n++) void next(); }, 1500);   // 最初の映像と音を先に
+  setTimeout(() => { pump(); setInterval(pump, 1000); }, 1500);   // 最初の映像と音を先に。再生位置が動けば 1 秒以内に追う
 }
+declare function frameNow(): number;
 
 window.MIRU_CLOUD = 1;
 boot().catch((e) => {

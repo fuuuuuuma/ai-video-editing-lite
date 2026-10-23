@@ -39,7 +39,10 @@ const opt = {};
 for (let i = 0; i < rest.length; i++) if (rest[i].startsWith("--")) opt[rest[i].slice(2)] = rest[i + 1] === undefined || rest[i + 1].startsWith("--") ? true : rest[++i];
 const expand = (p) => resolve(String(p).replace(/^~(?=$|[\\/])/, homedir()));
 const DIR = expand(opt.dir ?? process.env.MIRU_DIR ?? join(homedir(), "MIRU"));
-const CONF = join(homedir(), ".config", "miru");
+// npm install が書き直すので、利用者の変更として数えず、いつも新しい版のものにする（足した依存は package.json から作り直される）
+const ALWAYS_THEIRS = new Set(["package-lock.json"]);
+// この PC の上げる先と鍵（lite の miru_sync.py と同じ場所）。試しに立てるときは MIRU_CONFIG_DIR で別の場所にできる
+const CONF = process.env.MIRU_CONFIG_DIR ? expand(process.env.MIRU_CONFIG_DIR) : join(homedir(), ".config", "miru");
 
 const say = (s = "") => console.log(s);
 const fail = (s, code = 1) => { console.error(`\n✗ ${s}`); process.exit(code); };
@@ -51,7 +54,9 @@ function run(bin, args, { capture = false, cwd = DIR, quiet = false } = {}) {
   if (!quiet) say(`$ ${bin} ${args.join(" ")}`);
   const shell = WIN && bin !== "git";
   const child = spawn(shell ? `${bin}.cmd` : bin, shell ? args.map(winq) : args, {
-    cwd, shell, stdio: capture ? ["inherit", "pipe", "pipe"] : "inherit", env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
+    cwd, shell, stdio: capture ? ["inherit", "pipe", "pipe"] : "inherit",
+    // アカウントが複数あるとき、設定（wrangler.jsonc）を書く前の D1・R2 の作成から同じアカウントを使う
+    env: { ...process.env, WRANGLER_SEND_METRICS: "false", ...(ACCOUNT() ? { CLOUDFLARE_ACCOUNT_ID: ACCOUNT() } : {}) },
   });
   let out = "";
   if (capture) {
@@ -89,6 +94,7 @@ function explain(out) {
 const readJson = (f, d = null) => { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return d; } };
 const jsonOf = async (r) => { try { return await r.json(); } catch { return null; } };
 const readState = () => readJson(join(DIR, STATE));
+const ACCOUNT = () => (typeof opt.account === "string" ? opt.account : readState()?.account) || "";
 const writeState = (s) => writeFileSync(join(DIR, STATE), JSON.stringify(s, null, 2) + "\n");
 const bundled = () => readJson(join(SRC, "VERSION.json"), { build: 0, date: "", commit: "dev", feed: "" });
 const verLabel = (v) => (v?.build ? `版 ${v.build}（${v.date}）` : "開発中の版");
@@ -149,6 +155,7 @@ function install() {
     for (const f of files) {
       const t = read(SRC, f), b = read(base, f), m = read(DIR, f);
       if (same(t, m)) continue;                                   // もう同じ
+      if (ALWAYS_THEIRS.has(f)) { t === null ? rmSync(join(DIR, f), { force: true }) : put(DIR, f, t); continue; }
       if (same(m, b)) { t === null ? rmSync(join(DIR, f)) : put(DIR, f, t); if (t === null) r.removed.push(f); continue; }   // 直していない → 新しい版に
       if (same(t, b)) { r.kept.push(f); continue; }                // 新しい版は変えていない → あなたのまま
       const merged = git && t && b && m ? merge3(m, b, t) : null;  // 両方が変えた → 混ぜる
@@ -314,7 +321,7 @@ async function google() {
 async function backup({ quiet = false } = {}) {
   const st = needState();
   mkdirSync(join(DIR, "backups"), { recursive: true });
-  const file = `backups/${st.name}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}.sql`;
+  const file = `backups/${st.name}-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}.sql`;
   const r = await wrangler(["d1", "export", st.name, "--remote", "--output", file, "-y"], { capture: true, quiet });
   if (!r.ok) { if (quiet) return null; explain(r.out); fail("控えを取れませんでした"); }
   say(`控えを取りました: ${join(DIR, file)}（文字のデータ。動画は R2 にあり、この控えには入りません）`);
@@ -375,7 +382,7 @@ function changes() {
   needState();
   const base = join(DIR, BASE);
   if (!existsSync(base)) fail("入れた版の写しがありません（前の版の setup.mjs で立てたもの）。次の update から比べられます");
-  const mine = new Set(listFiles(DIR)), orig = new Set(listFiles(base));
+  const mine = new Set(listFiles(DIR).filter((f) => !ALWAYS_THEIRS.has(f))), orig = new Set(listFiles(base).filter((f) => !ALWAYS_THEIRS.has(f)));
   const changed = [...orig].filter((f) => mine.has(f) && !same(read(DIR, f), read(base, f)));
   const added = [...mine].filter((f) => !orig.has(f));
   const removed = [...orig].filter((f) => !mine.has(f));
@@ -456,7 +463,7 @@ async function status() {
   say(`場所:       ${DIR}\nURL:        ${st.url ?? "（まだ）"}\n持ち主:     ${st.owner}\n入れた版:   ${verLabel(st.installed)}${pkg.build > (st.installed?.build ?? 0) ? `（新しい版 ${verLabel(pkg)} があります: update）` : ""}\nGoogle ID:  ${st.google_client_id || "（まだ）"}\n容量の上限: ${st.owner_quota === 0 ? "なし" : `${((st.owner_quota ?? DEFAULT_QUOTA) / GB).toFixed(1)}GB`}`);
   const base = join(DIR, BASE);
   if (existsSync(base)) {
-    const n = listFiles(base).filter((f) => !same(read(DIR, f), read(base, f))).length;
+    const n = listFiles(base).filter((f) => !ALWAYS_THEIRS.has(f) && !same(read(DIR, f), read(base, f))).length;
     say(`自分で直したファイル: ${n} 個${n ? "（node tools/setup.mjs changes）" : ""}`);
   }
   await login();

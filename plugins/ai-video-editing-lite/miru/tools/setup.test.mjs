@@ -40,7 +40,7 @@ if (cmd === "vite") { mkdirSync("dist", { recursive: true }); process.exit(0); }
 if (cmd === "tsc") process.exit(mode === "tsc-fail" ? 2 : 0);
 if (cmd !== "wrangler") err("unknown " + cmd);
 const w = args.slice(1);
-const multi = () => { if (mode === "multi-account") err("More than one account available but unable to select one in non-interactive mode.\\nAvailable accounts are (\`<name>\`: \`<account_id>\`):\\n  \`A\`: \`aaa\`\\n  \`B\`: \`bbb\`"); };
+const multi = () => { if (mode === "multi-account" && !process.env.CLOUDFLARE_ACCOUNT_ID) err("More than one account available but unable to select one in non-interactive mode.\\nAvailable accounts are (\`<name>\`: \`<account_id>\`):\\n  \`A\`: \`aaa\`\\n  \`B\`: \`bbb\`"); };
 if (w[0] === "whoami") process.exit(0);
 if (w[0] === "login") process.exit(0);
 if (w[0] === "d1" && w[1] === "list") { multi(); out(JSON.stringify(st.d1.map((n) => ({ name: n, uuid: "11111111-2222-3333-4444-" + n.padEnd(12, "0").slice(0, 12).replace(/[^0-9a-f]/g, "0") })))); process.exit(0); }
@@ -105,6 +105,12 @@ test("start: 止まりやすい所は、することを言って決まったコ�
       assert.equal(r.code, code, `${mode}: ${r.out}`);
       assert.match(r.out, words, mode);
       if (mode === "r2-disabled" || mode === "no-subdomain") assert.equal(s.run(["start", "--owner", "taro@gmail.com"]).code, 0, `${mode} のあと続きから`);
+      if (mode === "multi-account") {   // --account を付けると、設定を書く前の D1 の作成から効く（2026-10-23 本物の Cloudflare で見つけた）
+        const again = s.run(["start", "--owner", "taro@gmail.com", "--account", "aaa"], { FAKE_MODE: mode });
+        assert.equal(again.code, 0, again.out);
+        assert.match(readFileSync(join(s.dir, "wrangler.jsonc"), "utf8"), /"account_id": "aaa"/);
+        assert.equal(s.run(["deploy"], { FAKE_MODE: mode }).code, 0, "記録したアカウントで続ける");
+      }
     } finally { s.done(); }
   }
 });
@@ -137,10 +143,13 @@ test("update: 自分で直した所は残し、新しい版の変更と混ぜる
   const s = sandbox();
   try {
     s.run(["start", "--owner", "taro@gmail.com"]);
+    writeFileSync(join(s.dir, "package-lock.json"), '{"rewritten":"by npm"}');   // npm install が書き直したもの（直した数に入れない）
     // 利用者が自分の MIRU を直す（1 行目）・自分のファイルを足す
     writeFileSync(join(s.dir, "worker", "app.ts"), "export const a = 100;\nexport const b = 2;\nexport const c = 3;\n");
     writeFileSync(join(s.dir, "worker", "mine.ts"), "export const mine = true;\n");
-    assert.match(s.run(["changes"]).out, /worker\/app\.ts[\s\S]*worker\/mine\.ts/);
+    const ch = s.run(["changes"]).out;
+    assert.match(ch, /worker\/app\.ts[\s\S]*worker\/mine\.ts/);
+    assert.doesNotMatch(ch, /package-lock/);
     // 新しい版は 3 行目を変え、ファイルを 1 つ足す
     writeFileSync(join(s.src, "worker", "app.ts"), "export const a = 1;\nexport const b = 2;\nexport const c = 300;\n");
     writeFileSync(join(s.src, "worker", "new.ts"), "export const n = 1;\n");
