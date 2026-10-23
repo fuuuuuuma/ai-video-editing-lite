@@ -322,6 +322,8 @@ async function pageSettings() {
     <div class="glass card stack">
       <div class="small muted">鍵を作ると、Claude Code と Codex に貼るコマンドが出ます。鍵はこの画面で一度しか見られません。</div>
       <div class="hstack"><input id="tkLabel" placeholder="鍵の名前（例: 自分の Mac）" style="flex:1"><button class="btn primary" id="tkMake">鍵を作る</button></div>
+      <div class="small muted">この鍵では、消す・招待する・鍵を作るはできません（漏れたときに困らないように。それらはこの画面で）。</div>
+      ${me!.site?.can_create && me!.site?.invite_only && !LIGHT(me!.site) ? `<label class="small hstack" style="gap:8px"><input type="checkbox" id="tkAdmin" style="width:auto">持ち主用の鍵にする（編集スキルを配る editor-publish 用。画面と同じことができるので、Claude Code・Codex には入れない）</label>` : ""}
       <div id="tkOut"></div><div id="tkList" class="list"></div></div>
     ${me!.site?.can_create !== false || me!.usage.channels ? `<h2>容量</h2><div class="glass card stack" id="usage">${usageCard(me!.usage)}</div>` : ""}
     <h2>この MIRU</h2><div class="glass card stack" id="about">${aboutCard(me!.site)}</div>
@@ -333,16 +335,26 @@ async function pageSettings() {
   checkUpdate(me!.site);
   const mcpUrl = `${location.origin}/mcp`;
   const drawTokens = async () => {
-    const r = await api<{ tokens: { id: string; label: string; created_at: number; last_used_at: number | null; expires_at: number | null }[] }>("/api/tokens");
+    const r = await api<{ tokens: { id: string; label: string; scope?: string; created_at: number; last_used_at: number | null; expires_at: number | null }[] }>("/api/tokens");
     const box = $("#tkList")!; box.replaceChildren();
     for (const t of r.tokens) {
-      const row = h(`<div class="glass row-item"><div class="grow"><b>${esc(t.label)}</b><div class="small muted">${ago(t.created_at)}に作成・${t.last_used_at ? `${ago(t.last_used_at)}に使用` : "まだ使われていません"}${t.expires_at ? `・${day(t.expires_at)}まで` : ""}</div></div></div>`);
+      const row = h(`<div class="glass row-item"><div class="grow"><b>${esc(t.label)}</b>${t.scope === "admin" ? ` <span class="small" style="color:var(--warn)">持ち主用</span>` : ""}<div class="small muted">${ago(t.created_at)}に作成・${t.last_used_at ? `${ago(t.last_used_at)}に使用` : "まだ使われていません"}${t.expires_at ? `・${day(t.expires_at)}まで` : ""}</div></div></div>`);
       box.append(swipeable(row, { right: { label: "この鍵を消す", run: async () => { await api(`/api/tokens/${t.id}`, { method: "DELETE" }); toast("鍵を消しました"); drawTokens(); } } }));
     }
     if (r.tokens.length) box.append(h(`<div class="small muted" style="text-align:center">左へスワイプで鍵を消せます</div>`));
   };
   $("#tkMake")!.addEventListener("click", async () => {
-    const r = await api<{ token: string }>("/api/tokens", { method: "POST", body: { label: ($("#tkLabel") as HTMLInputElement).value || "Claude Code" } });
+    const admin = !!($("#tkAdmin") as HTMLInputElement | null)?.checked;
+    const r = await api<{ token: string }>("/api/tokens", { method: "POST", body: { label: ($("#tkLabel") as HTMLInputElement).value || (admin ? "持ち主用" : "Claude Code"), scope: admin ? "admin" : "work" } });
+    if (admin) {   // 持ち主用は editor-publish のためだけ。MCP の設定（平文で置かれる）には入れない
+      $("#tkOut")!.innerHTML = `<div class="small"><b>持ち主用の鍵</b>（編集スキルを配る <span class="code" style="display:inline;padding:1px 6px">miru_sync.py editor-publish</span> だけが使います）</div>
+        <div class="hstack" style="margin-top:8px"><button class="btn sm" id="tkKey">鍵をコピー</button></div>
+        <div class="small muted" style="margin-top:8px">コピーしてから、ターミナルで <span class="code" style="display:inline;padding:1px 6px">mkdir -p ~/.config/miru &amp;&amp; pbpaste &gt; ~/.config/miru/admin-token &amp;&amp; chmod 600 ~/.config/miru/admin-token</span>。
+        Claude Code・Codex の設定には入れないでください。使わなくなったら左へスワイプで消します。</div>`;
+      $("#tkKey")!.addEventListener("click", async () => { await navigator.clipboard.writeText(r.token); toast("鍵をコピーしました"); });
+      drawTokens();
+      return;
+    }
     const cmd = `claude mcp add --transport http miru ${mcpUrl} --header "Authorization: Bearer ${r.token}"`;
     // Codex は設定ファイル（~/.codex/config.toml）に鍵のヘッダーを書く。環境変数が要らないので、アプリ版の Codex でも読める
     const codexMac = `mkdir -p ~/.codex && printf '\\n[mcp_servers.miru]\\nurl = "${mcpUrl}"\\nhttp_headers = { Authorization = "Bearer ${r.token}" }\\n' >> ~/.codex/config.toml`;

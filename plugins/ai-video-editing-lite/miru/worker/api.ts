@@ -84,13 +84,14 @@ export async function roleIn(env: Env, who: Who, channelId: string): Promise<Rol
 type Video = { id: string; channel_id: string; title: string; status: string; thumb: string | null; created_at: number; updated_at: number };
 const videoOf = (db: D1Database, id: string) => one<Video>(db, "SELECT * FROM videos WHERE id = ?1", id);
 
-/** 容量: チャンネルを作った人ごとに、その人のチャンネルの版（上げ途中も含む）の合計 */
+/** 容量: チャンネルを作った人ごとに、その人のチャンネルの版（上げ途中も含む）・共有置き場・分割アップロードの途中の合計 */
 export async function usageOf(env: Env, email: string) {
   const db = env.DB;
   const u = await one<{ quota_bytes: number | null }>(db, "SELECT quota_bytes FROM users WHERE email = ?1 ORDER BY quota_bytes DESC LIMIT 1", email.toLowerCase());
   const r = await one<{ bytes: number; channels: number }>(db,
     "SELECT coalesce((SELECT sum(x.bytes) FROM versions x JOIN videos v ON v.id = x.video_id JOIN channels c ON c.id = v.channel_id WHERE c.created_by = ?1), 0) + " +
-    "coalesce((SELECT sum(b.size) FROM blobs b JOIN videos v ON v.id = b.video_id JOIN channels c ON c.id = v.channel_id WHERE c.created_by = ?1), 0) AS bytes, " +
+    "coalesce((SELECT sum(b.size) FROM blobs b JOIN videos v ON v.id = b.video_id JOIN channels c ON c.id = v.channel_id WHERE c.created_by = ?1), 0) + " +
+    "coalesce((SELECT sum(x.bytes) FROM uploads x JOIN videos v ON v.id = x.video_id JOIN channels c ON c.id = v.channel_id WHERE c.created_by = ?1), 0) AS bytes, " +
     "(SELECT count(*) FROM channels WHERE created_by = ?1) AS channels", email.toLowerCase());
   const lim = limits(env);
   const owner = isSiteOwner(env, email);
@@ -169,6 +170,16 @@ export class HttpError extends Error { constructor(public status: number, msg: s
 
 const now = () => Date.now();
 const newId = () => random(9);
+/** 作業用の鍵（Claude Code・Codex・上げる道具の設定に平文で置かれる）でできること（2026-10-24 セキュリティ確認）。
+ *  編集の流れ（読む・上げる・指示に返事・手直し・状態・強調デザイン・トンマナ）は全部でき、漏れたときに困る操作だけを断る:
+ *  消す操作全部・鍵を作る/消す・招待と役割・編集スキルの差し替え（招待した人の PC に配られる）。画面（cookie）と持ち主用の鍵はすべてできる */
+export function workTokenMay(m: string, seg: string[]): boolean {
+  if (m === "DELETE") return false;
+  if (seg[1] === "tokens") return false;
+  if (seg[1] === "channels" && seg[3] === "members" && m !== "GET") return false;
+  if (seg[1] === "editor" && m === "PUT") return false;
+  return true;
+}
 /** 画面での手直しの 1 件として受け取れるか。確認画面は op やコマを HTML に入れるので、形の決まった所は形を確かめる（2026-10-23） */
 const EDIT_NUMS = ["frame", "old_frame", "start", "end", "old_start", "old_end"];
 function editItemOk(x: Record<string, unknown>): boolean {
@@ -264,6 +275,9 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
   const m = req.method;
   if (m !== "GET" && m !== "HEAD" && !writable(req, who)) return json({ error: "この画面からだけ" }, 403);
   const seg = p.split("/").filter(Boolean).map(decodeURIComponent);   // ["api", ...] / ["m", ...]
+  if (who.via === "token" && who.scope !== "admin" && !workTokenMay(m, seg)) {
+    return json({ error: "この鍵ではできません。MIRU の画面から操作してください（作業用の鍵は、消す・招待する・鍵を作る・編集スキルを置くことができません）" }, 403);
+  }
 
   // ── 動画・画像・音（招待された人だけ） ──
   if (seg[0] === "m") {
@@ -281,16 +295,19 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
   // ── 鍵（Claude Code・書き出しの道具） ──
   if (seg[1] === "tokens") {
     if (who.via !== "cookie") return json({ error: "鍵は画面から作ってください" }, 403);
-    if (m === "GET") return json({ tokens: await many(db, "SELECT substr(hash, 1, 8) AS id, label, created_at, last_used_at, expires_at FROM tokens WHERE user_id = ?1 ORDER BY created_at DESC", who.id) });
+    if (m === "GET") return json({ tokens: await many(db, "SELECT substr(hash, 1, 8) AS id, label, scope, created_at, last_used_at, expires_at FROM tokens WHERE user_id = ?1 ORDER BY created_at DESC", who.id) });
     if (m === "POST") {
-      const body = await readJson<{ label?: string }>(req);
+      const body = await readJson<{ label?: string; scope?: string }>(req);
+      // 持ち主用の鍵は、個人用 MIRU のサイトの持ち主だけ（編集スキルを配る editor-publish のため）。ライトには配る道が無いので作らない
+      const scope = body.scope === "admin" ? "admin" : "work";
+      if (scope === "admin" && (editionOf(env) === "light" || !isSiteOwner(env, who.email))) return json({ error: "持ち主用の鍵は、サイトの持ち主だけが作れます" }, 403);
       const label = String(body.label ?? "Claude Code").slice(0, 60) || "Claude Code";
       const n = await one<{ n: number }>(db, "SELECT count(*) AS n FROM tokens WHERE user_id = ?1", who.id);
       if ((n?.n ?? 0) >= 10) return json({ error: "鍵は 10 本までです" }, 400);
       const token = TOKEN_PREFIX + random(32);
       const expires = now() + TOKEN_DAYS * DAY;
-      await exec(db, "INSERT INTO tokens (hash, user_id, label, created_at, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)", await sha256(token), who.id, label, now(), expires);
-      return json({ token, label, expires_at: expires });
+      await exec(db, "INSERT INTO tokens (hash, user_id, label, created_at, expires_at, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6)", await sha256(token), who.id, label, now(), expires, scope);
+      return json({ token, label, scope, expires_at: expires });
     }
     if (m === "DELETE" && seg[2]) {
       const ch = await exec(db, "DELETE FROM tokens WHERE user_id = ?1 AND substr(hash, 1, 8) = ?2", who.id, seg[2]);
@@ -435,7 +452,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
     // 強調デザインの一覧（採用・不採用はサイトが正。決めるのは管理者）
     if (seg[3] === "designs") {
       const did = seg[4];
-      if (!did && m === "GET") return json({ channel: ch, role, ...(await designsOf(db, cid)) });
+      if (!did && m === "GET") return json({ channel: ch, role, ...(await designsOf(db, cid, role === "owner")) });
       if (!did && m === "PUT") {          // スキル（miru_sync.py designs-push）が役割とデザインを上げる。決めた状態は上書きしない
         if (RANK[role] < RANK.owner) return json({ error: "管理者だけができます" }, 403);
         const b = await readJson<{ roles?: Record<string, unknown>[]; designs?: Record<string, unknown>[] }>(req, 1_000_000);
@@ -455,7 +472,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
               String(d.memo ?? "").slice(0, 1000), i, st === "open" ? null : t, t));
         }
         if (stmts.length) await db.batch(stmts);
-        return json({ ok: true, ...(await designsOf(db, cid)) });
+        return json({ ok: true, ...(await designsOf(db, cid, role === "owner")) });
       }
       if (did && seg[5] === "image") {
         const key = `c/${cid}/designs/${did.replace(/[^\w-]/g, "")}.jpg`;
@@ -477,14 +494,14 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
         const memo = b.memo === undefined ? d.memo : String(b.memo).slice(0, 1000);
         await exec(db, "UPDATE designs SET status = ?3, memo = ?4, decided_at = ?5, decided_by = ?6, updated_at = ?5 WHERE channel_id = ?1 AND id = ?2",
           cid, did, st, memo, now(), who.email);
-        return json({ ok: true, ...(await designsOf(db, cid)) });
+        return json({ ok: true, ...(await designsOf(db, cid, role === "owner")) });
       }
     }
     // トンマナ（編集スキルのチャンネルの記憶）。編集の前に読み、同じように編集する。決める・変えるのは管理者
     if (seg[3] === "kit") {
       if (m === "GET") {
         const k = await one<{ body: string; updated_at: number; updated_by: string }>(db, "SELECT body, updated_at, updated_by FROM channel_kits WHERE channel_id = ?1", cid);
-        return json({ channel: ch, role, kit: k ? JSON.parse(k.body) : null, updated_at: k?.updated_at ?? null, updated_by: k?.updated_by ?? null });
+        return json({ channel: ch, role, kit: k ? JSON.parse(k.body) : null, updated_at: k?.updated_at ?? null, updated_by: k ? personOf(k.updated_by, await nameOf(db, k.updated_by), role === "owner") : null });
       }
       if (m === "PUT") {
         if (RANK[role] < RANK.owner) return json({ error: "トンマナを変えられるのは管理者だけです" }, 403);
@@ -659,7 +676,9 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
         const id = seg[6];
         if (!id && m === "POST") {
           await needRoom(env, v.channel_id, Math.max(0, Number(url.searchParams.get("size")) || 0));
-          return json({ uploadId: (await env.MEDIA.createMultipartUpload(key, { httpMetadata: { contentType: type } })).uploadId });
+          const up = await env.MEDIA.createMultipartUpload(key, { httpMetadata: { contentType: type } });
+          await exec(db, "INSERT INTO uploads (id, video_id, bytes, created_at) VALUES (?1, ?2, 0, ?3) ON CONFLICT(id) DO NOTHING", up.uploadId, v.id, now());
+          return json({ uploadId: up.uploadId });
         }
         if (id && seg[7] && /^\d+$/.test(seg[7]) && m === "PUT") {
           const n = Number(seg[7]);
@@ -668,12 +687,17 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
           if (!Number.isFinite(len)) return json({ error: "content-length が要ります" }, 411);
           if (len > 100_000_000) return json({ error: "1 つの片は 100MB までです" }, 413);
           await needRoom(env, v.channel_id, len);
-          return json(await env.MEDIA.resumeMultipartUpload(key, id).uploadPart(n, req.body));
+          const part = await env.MEDIA.resumeMultipartUpload(key, id).uploadPart(n, req.body);
+          // 途中の片も容量に数える（2026-10-24。数えないと、終わらせないまま片を積んで上限をすり抜けられた）。同じ番号の上げ直しは多めに数える
+          await exec(db, "INSERT INTO uploads (id, video_id, bytes, created_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(id) DO UPDATE SET bytes = bytes + ?3 WHERE video_id = ?2",
+            id, v.id, Math.floor(len), now());
+          return json(part);
         }
         if (id && seg[7] === "complete" && m === "POST") {
           const b = await readJson<{ parts?: { partNumber: number; etag: string }[] }>(req);
           await env.MEDIA.resumeMultipartUpload(key, id).complete(b.parts ?? []);
-          // 片ごとには積み上げていないので、できあがった大きさで上限を確かめる。超えていれば置かない（2026-10-23）
+          await exec(db, "DELETE FROM uploads WHERE id = ?1 AND video_id = ?2", id, v.id);    // 途中の分は blobs に移る
+          // できあがった大きさでも上限を確かめる。超えていれば置かない（2026-10-23）
           if (!(await one(db, "SELECT 1 AS x FROM blobs WHERE video_id = ?1 AND sha = ?2", v.id, sha))) {
             try { await needRoom(env, v.channel_id, (await env.MEDIA.head(key))?.size ?? 0); } catch (e) { await env.MEDIA.delete(key); throw e; }
           }
@@ -681,6 +705,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
         }
         if (id && seg[7] === "abort" && m === "POST") {
           try { await env.MEDIA.resumeMultipartUpload(key, id).abort(); } catch { /* もう無い */ }
+          await exec(db, "DELETE FROM uploads WHERE id = ?1 AND video_id = ?2", id, v.id);
           return json({ ok: true });
         }
       }
@@ -722,7 +747,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
     // 修正指示
     if (sub === "notes") {
       const nid = seg[4];
-      if (!nid && m === "GET") return json({ notes: await notesOf(db, v.id) });
+      if (!nid && m === "GET") return json({ notes: await notesOf(db, v.id, role === "owner") });
       if (!nid && m === "POST") {
         need("editor");
         const b = await readJson<Record<string, unknown>>(req);
@@ -742,7 +767,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
           id, v.id, String(b.version ?? "").slice(0, 30), who.email, numOrNull(b.frame), numOrNull(b.end_frame), strOrNull(b.tc), strOrNull(b.end_tc),
           text, String(b.category ?? "").slice(0, 20), extra, t);
         await exec(db, "UPDATE videos SET status = 'fixing', updated_at = ?2 WHERE id = ?1 AND status IN ('review', 'done')", v.id, t);
-        return json({ ok: true, id, notes: await notesOf(db, v.id) });
+        return json({ ok: true, id, notes: await notesOf(db, v.id, role === "owner") });
       }
       if (nid && m === "PATCH") {
         const b = await readJson<{ status?: string; text?: string; reply?: string; category?: string }>(req);
@@ -755,12 +780,12 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
         const reply = b.reply === undefined ? n.reply : String(b.reply).slice(0, 4000);
         const category = b.category === undefined ? n.category : String(b.category).slice(0, 20);
         await exec(db, "UPDATE notes SET status = ?2, text = ?3, reply = ?4, category = ?5, updated_at = ?6 WHERE id = ?1", nid, status, text, reply, category, now());
-        return json({ ok: true, notes: await notesOf(db, v.id) });
+        return json({ ok: true, notes: await notesOf(db, v.id, role === "owner") });
       }
       if (nid && m === "DELETE") {
         need("editor");
         await exec(db, "DELETE FROM notes WHERE id = ?1 AND video_id = ?2", nid, v.id);
-        return json({ ok: true, notes: await notesOf(db, v.id) });
+        return json({ ok: true, notes: await notesOf(db, v.id, role === "owner") });
       }
     }
 
@@ -797,9 +822,10 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
   // ── タスク（見られる動画の修正指示を全部）──
   if (seg[1] === "notes" && !seg[2] && m === "GET") {
     const rows = await many<Record<string, unknown> & { extra: string }>(db,
-      "SELECT n.*, v.title AS video_title, v.channel_id FROM notes n JOIN videos v ON v.id = n.video_id JOIN members m ON m.channel_id = v.channel_id AND m.email = ?1 " +
+      "SELECT n.*, v.title AS video_title, v.channel_id, m.role AS my_role, (SELECT name FROM users WHERE email = n.author ORDER BY created_at LIMIT 1) AS author_name " +
+      "FROM notes n JOIN videos v ON v.id = n.video_id JOIN members m ON m.channel_id = v.channel_id AND m.email = ?1 " +
       "ORDER BY n.updated_at DESC LIMIT 500", who.email.toLowerCase());
-    return json({ notes: rows.map(({ extra, ...n }) => ({ ...n, ...safeParse(extra) })) });
+    return json({ notes: rows.map(({ extra, my_role, ...n }) => ({ ...n, author: personOf(n.author as string, n.author_name as string | null, my_role === "owner"), ...safeParse(extra) })) });
   }
 
   // ── AI（Workers AI）: 音声入力の指示を読みやすく・種類を付ける／入力の候補 ──
@@ -845,17 +871,25 @@ const videosOf = (db: D1Database, cid: string) =>
     "(SELECT count(*) FROM notes WHERE video_id = v.id AND status != 'done') AS open FROM videos v WHERE v.channel_id = ?1 ORDER BY v.updated_at DESC", cid);
 const versionsOf = (db: D1Database, vid: string) =>
   many(db, "SELECT name, frames, fps, ready, bytes, note, created_at FROM versions WHERE video_id = ?1 ORDER BY created_at DESC", vid);
-const notesOf = async (db: D1Database, vid: string) =>
-  (await many<Record<string, unknown> & { extra: string }>(db, "SELECT * FROM notes WHERE video_id = ?1 ORDER BY coalesce(frame, 0), created_at", vid))
-    .map(({ extra, ...n }) => ({ ...n, ...safeParse(extra) }));
+/** 人のメールは管理者だけに見せる（2026-10-24 セキュリティ確認）。ほかの人には Google の名前（無ければ「チャンネルの人」）。
+ *  招待した人の一覧（members）は前から管理者だけ。修正指示を書いた人・デザインを決めた人・トンマナを直した人も同じにする */
+export const personOf = (email: string | null | undefined, name: string | null | undefined, owner: boolean) =>
+  !email ? null : owner ? email : name || "チャンネルの人";
+const nameOf = async (db: D1Database, email: string | null) =>
+  email ? (await one<{ name: string }>(db, "SELECT name FROM users WHERE email = ?1 ORDER BY created_at LIMIT 1", email))?.name ?? null : null;
+const notesOf = async (db: D1Database, vid: string, owner: boolean) =>
+  (await many<Record<string, unknown> & { extra: string; author: string; author_name: string | null }>(db,
+    "SELECT n.*, (SELECT name FROM users WHERE email = n.author ORDER BY created_at LIMIT 1) AS author_name FROM notes n WHERE n.video_id = ?1 ORDER BY coalesce(n.frame, 0), n.created_at", vid))
+    .map(({ extra, ...n }) => ({ ...n, author: personOf(n.author, n.author_name, owner), ...safeParse(extra) }));
 const openNotes = async (db: D1Database, vid: string) => (await one<{ n: number }>(db, "SELECT count(*) AS n FROM notes WHERE video_id = ?1 AND status != 'done'", vid))?.n ?? 0;
 const safeParse = (s: string) => { try { return JSON.parse(s) as Record<string, unknown>; } catch { return {}; } };
 
-async function designsOf(db: D1Database, cid: string) {
+async function designsOf(db: D1Database, cid: string, owner: boolean) {
   const roles = await many(db, "SELECT role, label, when_text AS \"when\", avoid FROM design_roles WHERE channel_id = ?1 ORDER BY sort", cid);
   const designs = (await many<Record<string, unknown> & { style: string }>(db,
-    "SELECT id, role, name, style, status, memo, image IS NOT NULL AS has_image, decided_at, decided_by, updated_at FROM designs WHERE channel_id = ?1 ORDER BY sort", cid))
-    .map((d) => ({ ...d, style: safeParse(d.style) }));
+    "SELECT id, role, name, style, status, memo, image IS NOT NULL AS has_image, decided_at, decided_by, updated_at, " +
+    "(SELECT name FROM users WHERE email = designs.decided_by ORDER BY created_at LIMIT 1) AS decided_by_name FROM designs WHERE channel_id = ?1 ORDER BY sort", cid))
+    .map(({ decided_by_name, ...d }) => ({ ...d, decided_by: personOf(d.decided_by as string | null, decided_by_name as string | null, owner), style: safeParse(d.style) }));
   return { roles, designs };
 }
 
@@ -880,6 +914,7 @@ export async function cleanup(env: Env, t = Date.now()) {
   out.sessions = await exec(db, "DELETE FROM sessions WHERE expires_at < ?1", t);
   out.tokens = await exec(db, "DELETE FROM tokens WHERE expires_at IS NOT NULL AND expires_at < ?1", t);
   await exec(db, "DELETE FROM tickets WHERE expires_at < ?1", t);
+  await exec(db, "DELETE FROM uploads WHERE created_at < ?1", t - 7 * DAY);   // R2 も終わらなかった分割アップロードを 7 日で捨てる
   await exec(db, "DELETE FROM usage WHERE day < ?1", new Date(t - 40 * DAY).toISOString().slice(0, 10));
   const drop = async (rows: { video_id: string; name: string }[]) => {
     for (const r of rows) {

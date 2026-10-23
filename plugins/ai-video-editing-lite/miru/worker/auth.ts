@@ -44,7 +44,8 @@ export const json = (body: unknown, status = 200, headers: Record<string, string
 const redirect = (to: string, headers: Record<string, string> = {}) =>
   new Response(null, { status: 302, headers: { location: to, "cache-control": "no-store", ...headers } });
 
-export type Who = User & { via: "cookie" | "token" };
+/** scope は鍵だけ: work（作業用。Claude Code・Codex・上げる道具）か admin（サイトの持ち主が画面で作る持ち主用） */
+export type Who = User & { via: "cookie" | "token"; scope?: "work" | "admin" };
 
 /** 同じ受け箱かを比べる形。Gmail は点と + 以降を見ず、googlemail.com も gmail.com と同じ（Google の決まり）。
  *  ほかのメールは大文字小文字だけそろえる（点や + の扱いは会社ごとに違うので触らない） */
@@ -100,10 +101,11 @@ export async function currentUser(req: Request, db: D1Database, now = Date.now()
   const bearer = /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") ?? "")?.[1];
   if (bearer?.startsWith(TOKEN_PREFIX)) {
     const h = await sha256(bearer);
-    const u = await one<User>(db, "SELECT u.id, u.email, u.name, u.picture FROM tokens t JOIN users u ON u.id = t.user_id WHERE t.hash = ?1 AND (t.expires_at IS NULL OR t.expires_at > ?2)", h, now);
+    const u = await one<User & { scope: string }>(db, "SELECT u.id, u.email, u.name, u.picture, t.scope FROM tokens t JOIN users u ON u.id = t.user_id WHERE t.hash = ?1 AND (t.expires_at IS NULL OR t.expires_at > ?2)", h, now);
     if (!u) return null;
     await exec(db, "UPDATE tokens SET last_used_at = ?2 WHERE hash = ?1", h, now);
-    return { ...u, via: "token" };
+    const { scope, ...user } = u;
+    return { ...user, via: "token", scope: scope === "admin" ? "admin" : "work" };
   }
   const token = cookies(req)[SESSION_COOKIE];
   if (!token) return null;
