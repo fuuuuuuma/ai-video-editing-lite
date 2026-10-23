@@ -42,6 +42,7 @@ MIRU ライトは、AI動画編集 lite が作った動画のプレビューを�
 - Claude Code: 1 行目（`claude mcp add …`）。
 - Codex: 「Mac 用をコピー」か「Windows 用をコピー」（`~/.codex/config.toml` に `[mcp_servers.miru]` を足す）。Codex を開き直すとつながる。
 - プレビューを上げる道具: 「鍵だけコピー」→ 画面のコマンド（`~/.config/miru/token` と `~/.config/miru/url` を置く）。
+- この鍵（作業用）では、消す・招待する・鍵を作るはできない（403「この鍵ではできません」）。頼まれたら、利用者に MIRU の画面でしてもらう。
 - 確かめる: `node $SETUP check` の「鍵で入れる」が ✓、または lite の `miru_sync.py version` が `reachable: true`。
 
 最初のチャンネルは、AI動画編集 lite が初めて上げるときに自動で作る。人に見せるときは「設定 → チャンネル → 招待する」→「招待した人に送る案内をコピー」を相手に送ってもらう（MIRU はメールを送らない）。
