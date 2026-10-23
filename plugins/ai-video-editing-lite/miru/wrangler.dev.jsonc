@@ -12,11 +12,16 @@
    "/api/*",
    "/m/*",
    "/auth/*",
-   "/mcp"
+   "/mcp",
+   "/dl/*"
   ]
  },
  "vars": {
   "GOOGLE_CLIENT_ID": "",
+  "MIRU_EDITION": "light",
+  "SITE_OWNERS": "owner@example.com",
+  "OWNER_QUOTA_BYTES": "9663676416",
+  "UPDATE_FEED": "https://raw.githubusercontent.com/fuuuuuuma/ai-video-editing-lite/main/plugins/ai-video-editing-lite/miru/VERSION.json",
   "FREE_QUOTA_BYTES": "2147483648",
   "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
   "DEV_LOGIN": "1"

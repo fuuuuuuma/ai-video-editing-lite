@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f4f6fa">
+<meta name="description" content="MIRU ライトを自分の Cloudflare に立てる手順と、つまずいたときの直し方">
+<title>MIRU ライト 導入ガイド</title>
+<style>
+/* MIRU ライトの導入ガイド（2026-10-23）。MIRU 本体と同じ白い Liquid Glass。スマホが先、広い画面では真ん中に寄せるだけ */
+:root{
+  --ink:#0f172a; --ink2:#475569; --ink3:#94a3b8; --line:rgba(15,23,42,.08);
+  --accent:#0a84ff; --accent2:#0a72e8; --ok:#30b45a; --warn:#ff9f0a; --bad:#ff3b30; --violet:#7a5cff;
+  --glass:rgba(255,255,255,.62); --glass-strong:rgba(255,255,255,.9); --glass-edge:rgba(255,255,255,.95);
+  --glass-shadow:0 1px 1px rgba(15,23,42,.04),0 6px 20px rgba(15,23,42,.07),0 20px 50px rgba(15,23,42,.05);
+  --spring:cubic-bezier(.34,1.56,.64,1); --ease:cubic-bezier(.22,1,.36,1);
+  --r:16px; --r-lg:22px; --tab-h:64px;
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+  color-scheme:light;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;overscroll-behavior-y:contain}
+body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:#f4f6fa;
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:-20%;z-index:-1;pointer-events:none;filter:blur(70px);
+  background:radial-gradient(40vmax 40vmax at 8% 6%,#cfe3ff 0,transparent 60%),radial-gradient(36vmax 36vmax at 92% 18%,#e6ddff 0,transparent 60%),
+    radial-gradient(34vmax 34vmax at 50% 108%,#d8f5ec 0,transparent 60%);
+  animation:drift 22s var(--ease) infinite alternate}
+@keyframes drift{to{transform:translate3d(4%,5%,0) scale(1.08)}}
+button,input{font:inherit;color:inherit}
+a{color:var(--accent);text-decoration:none}
+[hidden]{display:none!important}
+code,.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+.glass{background:var(--glass);-webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);
+  border:1px solid var(--glass-edge);border-radius:var(--r);box-shadow:var(--glass-shadow),inset 0 1px 0 rgba(255,255,255,.95)}
+
+/* ── 上の帯 ── */
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:calc(8px + var(--safe-t)) 16px 8px;
+  background:rgba(244,246,250,.72);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);
+  box-shadow:0 1px 0 rgba(15,23,42,.05);transition:box-shadow .3s}
+.logo{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:.12em;font-size:15px;white-space:nowrap}
+.logo i{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;color:#fff;font-style:normal;font-size:13px;letter-spacing:0;
+  background:linear-gradient(135deg,#3d9bff,#7a5cff);box-shadow:0 4px 12px rgba(10,114,232,.3)}
+.logo span{font-weight:700;letter-spacing:.02em;color:var(--ink2);font-size:13px}
+.grow{flex:1;min-width:0}
+.ring{position:relative;width:42px;height:42px;border:0;padding:0;background:transparent;cursor:pointer;border-radius:50%;transition:transform .4s var(--spring)}
+.ring:active{transform:scale(.9)}
+.ring svg{width:42px;height:42px;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:4}
+.ring .bg{stroke:rgba(15,23,42,.08)}
+.ring .fg{stroke:url(#ringGrad);stroke-linecap:round;transition:stroke-dashoffset .9s var(--spring)}
+.ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:11px;font-weight:800;color:var(--ink2)}
+
+main{padding:4px 16px calc(var(--tab-h) + 36px + var(--safe-b));max-width:640px;margin:0 auto}
+section{animation:rise .55s var(--spring) both}
+@keyframes rise{from{opacity:0;transform:translateY(14px) scale(.985)}}
+h1{font-size:24px;line-height:1.25;margin:6px 0 12px}
+h2{font-size:16px;margin:22px 4px 10px;display:flex;align-items:center;gap:8px}
+h2 .cnt{font-size:12px;font-weight:700;color:var(--ink3);background:rgba(15,23,42,.05);border-radius:999px;padding:1px 8px}
+h2 .cnt.full{color:#fff;background:var(--ok);animation:pop .5s var(--spring)}
+@keyframes pop{from{transform:scale(.6)}}
+.muted{color:var(--ink2)} .small{font-size:13px}
+.card{padding:14px 16px}
+.stack{display:flex;flex-direction:column;gap:12px}
+
+/* ── 状態（下に引くと確かめ直す）── */
+.status{display:flex;align-items:center;gap:12px;padding:12px 14px}
+.dot{width:12px;height:12px;border-radius:50%;flex:none;background:var(--ink3);box-shadow:0 0 0 4px rgba(148,163,184,.18);transition:background .4s,box-shadow .4s}
+.dot.ok{background:var(--ok);box-shadow:0 0 0 4px rgba(48,180,90,.18);animation:beat 2.4s ease-in-out infinite}
+.dot.warn{background:var(--warn);box-shadow:0 0 0 4px rgba(255,159,10,.2)}
+.dot.bad{background:var(--bad);box-shadow:0 0 0 4px rgba(255,59,48,.18)}
+@keyframes beat{50%{box-shadow:0 0 0 8px rgba(48,180,90,0)}}
+.status b{display:block;font-size:14px}
+.status .small{display:block;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.icon-btn{width:38px;height:38px;border-radius:50%;border:0;background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--ink2);
+  transition:background .2s,transform .35s var(--spring)}
+.icon-btn:hover{background:rgba(15,23,42,.06)} .icon-btn:active{transform:scale(.88)}
+.icon-btn svg{width:20px;height:20px}
+.spin svg{animation:turn .8s linear infinite}
+@keyframes turn{to{transform:rotate(360deg)}}
+
+/* ── あなたの値 ── */
+.field{position:relative;display:flex;flex-direction:column;gap:6px}
+.field label{font-size:12px;font-weight:700;color:var(--ink2);letter-spacing:.02em}
+input{width:100%;border:1px solid rgba(15,23,42,.1);background:rgba(255,255,255,.85);border-radius:12px;padding:11px 12px;outline:none;
+  transition:border-color .2s,box-shadow .2s;font-size:16px}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(10,132,255,.15)}
+.hint{font-size:12px;color:var(--ink3)}
+.seg{position:relative;display:flex;padding:3px;border-radius:999px;background:rgba(15,23,42,.05)}
+.seg button{position:relative;z-index:1;flex:1;border:0;background:transparent;padding:8px 10px;white-space:nowrap;border-radius:999px;font-size:14px;font-weight:700;color:var(--ink2);cursor:pointer;transition:color .3s}
+.seg button.on{color:var(--ink)}
+.seg i{position:absolute;z-index:0;top:3px;bottom:3px;border-radius:999px;background:#fff;box-shadow:0 2px 8px rgba(15,23,42,.1);transition:left .5s var(--spring),width .5s var(--spring)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:480px){.row2{grid-template-columns:1fr}}
+
+/* 入力の候補 */
+.ac{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:40;padding:6px;border-radius:14px;max-height:240px;overflow:auto;
+  background:var(--glass-strong);transform-origin:top center;animation:drop .35s var(--spring)}
+@keyframes drop{from{opacity:0;transform:translateY(-6px) scale(.97)}}
+.ac button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:9px 10px;border-radius:10px;cursor:pointer;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac button.on,.ac button:hover{background:rgba(10,132,255,.1)}
+.ac mark{background:transparent;color:var(--accent);font-weight:800}
+.ac small{display:block;color:var(--ink3);font-size:11px}
+
+/* ── 手順（右へスワイプで「できた」、左へで戻す・出なかった）── */
+.steps{display:flex;flex-direction:column;gap:8px}
+.sw{position:relative;border-radius:var(--r);animation:rise .5s var(--spring) both;animation-delay:calc(var(--i,0) * 40ms)}
+.quiet .sw,.quiet h2 .cnt:not(.full){animation:none}
+.sw .under{position:absolute;inset:0;border-radius:var(--r);display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-weight:800;font-size:13px;color:#fff;opacity:0;transition:opacity .2s}
+.sw .under.r{background:linear-gradient(90deg,var(--ok),#5fd07f)}
+.sw .under.l{background:linear-gradient(270deg,#8a94a6,#b4bdcc);justify-content:flex-end}
+.sw .under svg{width:22px;height:22px;transition:transform .3s var(--spring)}
+.step{position:relative;display:flex;align-items:center;gap:12px;padding:13px 14px;cursor:pointer;touch-action:pan-y;user-select:none;
+  transition:transform .45s var(--spring),box-shadow .3s,background .3s}
+.step.drag{transition:none}
+.step:active{box-shadow:var(--glass-shadow),0 0 0 3px rgba(10,132,255,.12)}
+.mark{width:28px;height:28px;flex:none;border-radius:50%;border:2px solid rgba(15,23,42,.14);display:grid;place-items:center;background:rgba(255,255,255,.7);
+  transition:background .35s,border-color .35s,transform .45s var(--spring);padding:0;cursor:pointer}
+.mark svg{width:16px;height:16px}
+.mark path{fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:22;stroke-dashoffset:22;transition:stroke-dashoffset .45s var(--ease) .1s}
+.step.done .mark{background:var(--ok);border-color:var(--ok);transform:scale(1.06)}
+.step.done .mark path{stroke-dashoffset:0}
+.step.skip .mark{background:#c4cbd6;border-color:#c4cbd6}
+.step.skip .mark path{stroke-dashoffset:22}
+.step.skip .mark::after{content:"";width:10px;height:2px;border-radius:1px;background:#fff}
+.step .t{font-weight:700;font-size:15px;line-height:1.35}
+.step .d{font-size:12.5px;color:var(--ink2);margin-top:2px;line-height:1.45}
+.step.done .t,.step.skip .t{color:var(--ink2)}
+.tag{display:inline-block;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:999px;margin-left:6px;vertical-align:2px;background:rgba(255,159,10,.14);color:#b86e00}
+.tag.you{background:rgba(122,92,255,.12);color:#5a3fd6}
+.tag.ai{background:rgba(10,132,255,.12);color:var(--accent2)}
+.chev{width:18px;height:18px;color:var(--ink3);flex:none}
+.step.next{box-shadow:var(--glass-shadow),0 0 0 2px rgba(10,132,255,.5)}
+.step.pulse{animation:pulse 1s var(--ease) 2}
+@keyframes pulse{50%{box-shadow:var(--glass-shadow),0 0 0 8px rgba(10,132,255,.18)}}
+.swipe-hint{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--ink3);margin:10px 0 0}
+.swipe-hint svg{width:16px;height:16px;animation:nudge 2.4s var(--ease) infinite}
+@keyframes nudge{30%{transform:translateX(6px)}60%{transform:none}}
+
+/* ── 困ったとき・そのあと ── */
+.search{position:relative}
+.search input{padding-left:40px}
+.search svg{position:absolute;left:13px;top:13px;width:18px;height:18px;color:var(--ink3);pointer-events:none}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{display:flex;align-items:center;gap:12px;padding:13px 14px;cursor:pointer;border:0;width:100%;text-align:left;
+  transition:transform .4s var(--spring),box-shadow .25s;animation:rise .5s var(--spring) both;animation-delay:calc(var(--i,0) * 35ms)}
+.item:active{transform:scale(.98)}
+.item .ic{width:34px;height:34px;flex:none;border-radius:11px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:12px;letter-spacing:.02em;
+  background:linear-gradient(135deg,var(--c1,#3d9bff),var(--c2,#7a5cff));box-shadow:0 4px 12px rgba(10,114,232,.22)}
+.item .t{font-weight:700;font-size:14.5px;line-height:1.35}
+.item .d{font-size:12.5px;color:var(--ink2);margin-top:2px}
+.item mark{background:rgba(10,132,255,.14);color:inherit;border-radius:4px;padding:0 1px}
+.empty{padding:28px 10px;text-align:center;color:var(--ink3);font-size:14px;animation:rise .4s var(--spring) both}
+
+/* ── コマンド ── */
+.code{display:flex;align-items:flex-start;gap:8px;padding:10px 10px 10px 12px;border-radius:12px;background:rgba(15,23,42,.045);border:1px solid rgba(15,23,42,.06)}
+.code code{flex:1;min-width:0;font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-all;padding-top:2px}
+.code button{flex:none;border:0;border-radius:9px;padding:6px 10px;font-size:12px;font-weight:800;color:var(--accent2);background:#fff;cursor:pointer;
+  box-shadow:0 1px 4px rgba(15,23,42,.1);transition:transform .35s var(--spring),background .25s,color .25s}
+.code button:active{transform:scale(.9)}
+.code button.did{background:var(--ok);color:#fff}
+.ph{color:#b86e00;background:rgba(255,159,10,.12);border-radius:4px;padding:0 2px}
+.box{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.7);border:1px solid var(--line);font-size:14px}
+.box.warn{background:rgba(255,159,10,.08);border-color:rgba(255,159,10,.25)}
+.box.ok{background:rgba(48,180,90,.08);border-color:rgba(48,180,90,.25)}
+.box b{display:block;margin-bottom:2px}
+.lbl{font-size:12px;font-weight:800;color:var(--ink2);margin:2px 4px -6px;letter-spacing:.02em}
+ol.how{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+ol.how li::marker{color:var(--ink3);font-weight:800}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13.5px;align-items:baseline}
+.kv b{color:var(--ink2);font-weight:700;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:rgba(255,255,255,.8);border-radius:12px;
+  padding:10px 14px;font-weight:700;cursor:pointer;transition:transform .35s var(--spring),background .25s,box-shadow .25s;font-size:14px;color:var(--ink)}
+.btn:active{transform:scale(.95)}
+.btn.primary{border:0;border-radius:999px;color:#fff;padding:12px 20px;background:linear-gradient(180deg,#3d9bff,#0a72e8);box-shadow:0 8px 22px rgba(10,114,232,.3),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn.ok{border:0;color:#fff;background:linear-gradient(180deg,#45c46c,#2a9f4f);box-shadow:0 8px 22px rgba(48,180,90,.28)}
+.btn svg{width:16px;height:16px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btns .btn{flex:1}
+
+/* ── 下のタブ ── */
+.tabs{position:fixed;left:50%;bottom:calc(12px + var(--safe-b));transform:translateX(-50%);z-index:30;display:flex;gap:4px;padding:6px;
+  border-radius:999px;width:min(420px,calc(100% - 24px))}
+.tabs .pill{position:absolute;top:6px;bottom:6px;border-radius:999px;background:#fff;box-shadow:0 2px 10px rgba(15,23,42,.1);transition:left .55s var(--spring),width .55s var(--spring)}
+.tabs button{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 4px 6px;border:0;background:transparent;border-radius:999px;
+  color:var(--ink2);font-size:11px;font-weight:700;cursor:pointer;transition:color .3s,transform .35s var(--spring)}
+.tabs button svg{width:22px;height:22px;transition:transform .45s var(--spring)}
+.tabs button.on{color:var(--accent)}
+.tabs button.on svg{transform:translateY(-1px) scale(1.08)}
+.tabs button:active{transform:scale(.92)}
+
+/* ── 下から出るパネル ── */
+.scrim{position:fixed;inset:0;z-index:50;background:rgba(15,23,42,.22);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);opacity:0;transition:opacity .35s var(--ease)}
+.scrim.on{opacity:1}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:51;margin:0 auto;max-width:640px;max-height:min(88vh,860px);display:flex;flex-direction:column;
+  border-radius:24px 24px 0 0;background:var(--glass-strong);-webkit-backdrop-filter:blur(30px) saturate(180%);backdrop-filter:blur(30px) saturate(180%);
+  box-shadow:0 -10px 40px rgba(15,23,42,.14),inset 0 1px 0 #fff;transform:translateY(105%);transition:transform .55s var(--spring)}
+.sheet.on{transform:translateY(0)}
+.sheet.drag{transition:none}
+.grab{padding:10px 0 4px;cursor:grab;touch-action:none;flex:none}
+.grab i{display:block;width:40px;height:5px;border-radius:3px;background:rgba(15,23,42,.18);margin:0 auto}
+.sheet header{display:flex;align-items:flex-start;gap:10px;padding:2px 18px 10px;flex:none}
+.sheet header h3{margin:0;font-size:18px;line-height:1.35;flex:1}
+.sheet .body{padding:0 18px calc(22px + var(--safe-b));overflow:auto;display:flex;flex-direction:column;gap:12px;overscroll-behavior:contain}
+.sheet .body > *{animation:rise .5s var(--spring) both}
+.sheet .body > *:nth-child(2){animation-delay:.04s} .sheet .body > *:nth-child(3){animation-delay:.08s} .sheet .body > *:nth-child(4){animation-delay:.12s}
+.sheet .body > *:nth-child(n+5){animation-delay:.16s}
+
+/* ── 知らせ ── */
+.toasts{position:fixed;left:50%;bottom:calc(var(--tab-h) + 28px + var(--safe-b));transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:calc(100% - 32px);max-width:420px}
+.toast{pointer-events:auto;display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:999px;font-size:14px;font-weight:700;color:#fff;
+  background:rgba(15,23,42,.86);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:0 10px 30px rgba(15,23,42,.25);
+  animation:tin .5s var(--spring) both}
+.toast.out{animation:tout .35s var(--ease) both}
+.toast svg{width:18px;height:18px;flex:none}
+.toast.ok svg{color:#7ee29b} .toast.err svg{color:#ff8a80}
+@keyframes tin{from{opacity:0;transform:translateY(16px) scale(.92)}}
+@keyframes tout{to{opacity:0;transform:translateY(10px) scale(.96)}}
+
+/* ── 引いて確かめ直す ── */
+.ptr{position:fixed;left:50%;top:calc(6px + var(--safe-t));z-index:25;width:40px;height:40px;margin-left:-20px;border-radius:50%;display:grid;place-items:center;
+  background:var(--glass-strong);box-shadow:0 6px 20px rgba(15,23,42,.14);transform:translateY(-70px) scale(.6);opacity:0;pointer-events:none}
+.ptr svg{width:22px;height:22px;color:var(--accent)}
+.ptr.go{transition:transform .5s var(--spring),opacity .3s}
+.ptr.run svg{animation:turn .8s linear infinite}
+
+/* ── 全画面の読み込み中 ── */
+.skel{position:fixed;inset:0;z-index:100;background:#f4f6fa;padding:calc(10px + var(--safe-t)) 16px 0;transition:opacity .5s var(--ease),transform .6s var(--ease)}
+.skel.gone{opacity:0;transform:scale(1.02);pointer-events:none}
+.skel .in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.sk{border-radius:14px;background:linear-gradient(100deg,rgba(15,23,42,.06) 30%,rgba(255,255,255,.9) 50%,rgba(15,23,42,.06) 70%);background-size:300% 100%;animation:shine 1.3s linear infinite}
+@keyframes shine{from{background-position:100% 0}to{background-position:0 0}}
+.skel .bar{position:fixed;left:50%;bottom:calc(12px + var(--safe-b));transform:translateX(-50%);width:min(420px,calc(100% - 24px));height:58px;border-radius:999px}
+
+/* できたときの粒 */
+.spark{position:fixed;z-index:70;width:8px;height:8px;border-radius:50%;pointer-events:none;animation:fly .9s var(--ease) forwards}
+@keyframes fly{to{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3d9bff"/><stop offset="1" stop-color="#7a5cff"/></linearGradient></defs></svg>
+
+<div class="skel" id="skel" aria-hidden="true"><div class="in">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 6px"><div class="sk" style="width:26px;height:26px;border-radius:8px"></div><div class="sk" style="width:150px;height:18px"></div><div style="flex:1"></div><div class="sk" style="width:42px;height:42px;border-radius:50%"></div></div>
+  <div class="sk" style="height:64px"></div>
+  <div class="sk" style="width:110px;height:16px;margin-top:12px"></div>
+  <div class="sk" style="height:230px"></div>
+  <div class="sk" style="width:90px;height:16px;margin-top:12px"></div>
+  <div class="sk" style="height:62px"></div><div class="sk" style="height:62px"></div><div class="sk" style="height:62px"></div><div class="sk" style="height:62px"></div>
+</div><div class="sk bar"></div></div>
+
+<div class="ptr" id="ptr" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg></div>
+
+<header class="top">
+  <div class="logo"><i>M</i>MIRU<span>ライト 導入ガイド</span></div>
+  <div class="grow"></div>
+  <button class="ring" id="ring" aria-label="できた数（押すと次の手順へ）"><svg viewBox="0 0 42 42"><circle class="bg" cx="21" cy="21" r="17"/><circle class="fg" id="ringFg" cx="21" cy="21" r="17" stroke-dasharray="106.8" stroke-dashoffset="106.8"/></svg><b id="ringTxt">0</b></button>
+</header>
+
+<main id="main">
+  <section id="tab-steps" data-tab="steps">
+    <div class="glass status" id="status">
+      <span class="dot" id="dot"></span>
+      <div class="grow"><b id="stTitle">あなたの MIRU</b><span class="small" id="stSub">URL を入れると、動いているか確かめます</span></div>
+      <button class="icon-btn" id="refresh" aria-label="確かめ直す"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg></button>
+    </div>
+
+    <h2>あなたの値</h2>
+    <div class="glass card stack">
+      <div class="row2">
+        <div class="field"><label>パソコン</label><div class="seg" data-key="os"><i></i><button data-v="mac">Mac</button><button data-v="win">Windows</button></div></div>
+        <div class="field"><label>AI</label><div class="seg" data-key="ai"><i></i><button data-v="claude">Claude Code</button><button data-v="codex">Codex</button></div></div>
+      </div>
+      <div class="field"><label for="email">MIRU にログインする Google のメール</label>
+        <input id="email" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="you@gmail.com"></div>
+      <div class="field"><label for="sub">workers.dev の名前（公開できたら出る URL でも可）</label>
+        <input id="sub" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="taro-videos">
+        <span class="hint" id="urlHint">入れると、Google に入れる URL とコマンドがあなたの値になります</span></div>
+    </div>
+
+    <div id="phases"></div>
+    <div class="swipe-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>右へスワイプで「できた」・左へで戻す</div>
+  </section>
+
+  <section id="tab-trouble" data-tab="trouble" hidden>
+    <h1>困ったとき</h1>
+    <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" autocomplete="off" spellcheck="false" placeholder="出た言葉で探す（redirect・R2 など）"></div>
+    <div class="box" style="margin-top:12px"><b>まずは通し確認</b>AI に「MIRU を確かめて」と頼むと、直す所を 1 つずつ言います。</div>
+    <h2>よくあること</h2>
+    <div class="list" id="troubles"></div>
+  </section>
+
+  <section id="tab-after" data-tab="after" hidden>
+    <h1>そのあと</h1>
+    <div class="list" id="afters"></div>
+  </section>
+</main>
+
+<nav class="tabs glass" id="tabs">
+  <span class="pill" id="pill"></span>
+  <button data-tab="steps" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/></svg>手順</button>
+  <button data-tab="trouble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8 1c0 1.7-2.4 2.2-2.4 3.7M12 17.3v.2"/></svg>困ったとき</button>
+  <button data-tab="after"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13.66-5.66L20 8.7"/><path d="M20 4v4.7h-4.7"/><path d="M20 12a8 8 0 0 1-13.66 5.66L4 15.3"/><path d="M4 20v-4.7h4.7"/></svg>そのあと</button>
+</nav>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <div class="grab" id="grab"><i></i></div>
+  <header><h3 id="sheetTitle"></h3><button class="icon-btn" id="sheetX" aria-label="閉じる"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+  <div class="body" id="sheetBody"></div>
+</div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+"use strict";
+const LITE = "fuuuuuuma/ai-video-editing-lite";
+const FEED = `https://raw.githubusercontent.com/${LITE}/main/plugins/ai-video-editing-lite/miru/VERSION.json`;
+const KEY = "miru-light-guide-v1";
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const h = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+
+// ── 覚えておくもの（この端末だけ。読めなくても動く）──
+const S = { os: /Windows/i.test(navigator.userAgent) ? "win" : "mac", ai: "claude", email: "", sub: "", steps: {}, hist: { email: [], sub: [] } };
+try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+
+// ── あなたの値から作るもの ──
+const ph = (s) => `<span class="ph">${esc(s)}</span>`;
+const subName = () => S.sub.trim().toLowerCase();
+const url = () => (subName() ? `https://miru.${subName()}.workers.dev` : "");
+const urlOr = () => url() || "https://miru.あなたの名前.workers.dev";
+const email = () => S.email.trim().toLowerCase() || "あなたのメール@gmail.com";
+const W = () => S.os === "win";
+const home = () => (W() ? "$HOME\\MIRU" : "~/MIRU");
+const npx = () => (W() ? "npx.cmd" : "npx");
+const askSetup = () => (S.ai === "claude" ? "/ai-video-editing-lite:miru-setup" : "$miru-setup");
+const install = () => S.ai === "claude"
+  ? `claude plugin marketplace add ${LITE}\nclaude plugin install ai-video-editing-lite@ai-video-editing-lite`
+  : `codex plugin marketplace add ${LITE}\ncodex plugin add ai-video-editing-lite@ai-video-editing-lite`;
+const pluginUpdate = () => S.ai === "claude"
+  ? "claude plugin marketplace update ai-video-editing-lite && claude plugin update ai-video-editing-lite@ai-video-editing-lite"
+  : "codex plugin marketplace upgrade ai-video-editing-lite && codex plugin add ai-video-editing-lite@ai-video-editing-lite";
+const setupCmd = (sub) => `node ${home()}${W() ? "\\tools\\setup.mjs" : "/tools/setup.mjs"} ${sub}`;
+const secretCmd = () => (W() ? `cd ${home()}\n${npx()} wrangler secret put GOOGLE_CLIENT_SECRET` : `cd ${home()} && ${npx()} wrangler secret put GOOGLE_CLIENT_SECRET`);
+
+/** コマンドの箱（コピーできる）。text は素の文字。placeholder の印はあとで付ける */
+let codes = [];
+function code(text, mark = []) {
+  codes.push(text);
+  let html = esc(text);
+  for (const m of mark) html = html.split(esc(m)).join(ph(m));
+  return `<div class="code"><code>${html}</code><button data-copy="${codes.length - 1}">コピー</button></div>`;
+}
+const placeholders = () => [!S.email.trim() && "あなたのメール@gmail.com", !url() && "https://miru.あなたの名前.workers.dev"].filter(Boolean);
+const box = (title, body, kind = "") => `<div class="box ${kind}">${title ? `<b>${title}</b>` : ""}${body}</div>`;
+const link = (href, label) => `<a href="${href}" target="_blank" rel="noopener">${label}</a>`;
+const openBtn = (href, label) => `<a class="btn primary" href="${href}" target="_blank" rel="noopener">${label}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"/></svg></a>`;
+const lbl = (t) => `<div class="lbl">${t}</div>`;
+const steps = (...xs) => `<ol class="how">${xs.map((x) => `<li>${x}</li>`).join("")}</ol>`;
+
+// ── 手順 ──（who: you あなたがする / ai AI がする。opt: 出たときだけ）
+const PHASES = [
+  { id: "prep", title: "準備", steps: [
+    { id: "accounts", who: "you", t: "アカウントを用意する", d: "Cloudflare と Google", body: () => [
+      steps(`Cloudflare のアカウントを作る（無料）: ${link("https://dash.cloudflare.com/sign-up", "dash.cloudflare.com/sign-up")}`,
+        "Cloudflare から届いたメールの<b>確認のリンクを押す</b>（押していないと、公開のところで止まります）",
+        "MIRU にログインする Google アカウントを決める（ふだんの Gmail で大丈夫です）"),
+      box("費用", "Cloudflare の無料の範囲で使えます。動画の置き場（R2）は 10GB まで無料で、MIRU ライトは 9GB で止まるので請求は来ません。"),
+    ] },
+    { id: "node", who: "you", t: "Node.js 20 以上を入れる", d: "セットアップの道具を動かすため", body: () => [
+      steps(`${link("https://nodejs.org/", "nodejs.org")} から LTS を入れる`, "ターミナル（Windows は PowerShell）で確かめる"),
+      code("node -v"),
+      box("", "v20 より大きい数字が出れば大丈夫です。"),
+    ] },
+    { id: "lite", who: "you", t: "AI動画編集 lite を入れる", d: "2 行のコマンド", body: () => [
+      box("", `${S.ai === "claude" ? "Claude Code" : "Codex"} を入れたターミナルで、この 2 行を動かします。`),
+      code(install()),
+      box("", "入れたら、新しいチャットを開きます。"),
+    ] },
+  ] },
+  { id: "cf", title: "Cloudflare に立てる", steps: [
+    { id: "ask", who: "ai", t: "AI に頼む", d: () => askSetup(), body: () => [
+      box("", `${S.ai === "claude" ? "Claude Code" : "Codex"} にこう送ります。`),
+      code(askSetup()),
+      box("AI に聞かれたら", `MIRU にログインする Google のメール（${esc(email())}）を答えます。AI が次を動かします。`),
+      code(`node <MIRU の場所>/tools/setup.mjs start --owner ${email()}`, placeholders()),
+    ] },
+    { id: "allow", who: "you", t: "Cloudflare で「Allow」を押す", d: "ブラウザが開いたら", body: () => [
+      steps("ブラウザに Cloudflare のログインの画面が出たらログインする", "「Allow（許可）」を押す", "「You have granted authorization」と出たら、そのページは閉じてかまいません"),
+    ] },
+    { id: "r2", who: "you", opt: true, t: "R2 を有効にする", d: "「R2 がまだ使える状態になっていません」と出たら", body: () => [
+      steps(`${link("https://dash.cloudflare.com/?to=/:account/r2/overview", "Cloudflare のダッシュボードの R2")} を開く`, "案内に沿って有効にする（支払い方法の登録を求められることがあります）", "AI に「有効にした」と伝える（同じコマンドを続きから動かします）"),
+      box("請求は？", "10GB までは無料です。MIRU ライトは 9GB で止まるので、請求は来ません。"),
+    ] },
+    { id: "subdomain", who: "you", opt: true, t: "workers.dev の名前を決める", d: "「名前がまだ決まっていません」と出たら", body: () => [
+      steps(`AI が出したリンク（…/workers/onboarding）か、${link("https://dash.cloudflare.com/?to=/:account/workers/onboarding", "Workers の始め方の画面")} を開く`,
+        "好きな英字の名前を登録する（例: taro-videos）", "上の「あなたの値」の workers.dev の名前に入れる", "AI に「登録した」と伝える"),
+    ] },
+    { id: "published", who: "ai", t: "公開できた URL を入れる", d: "「✓ MIRU を公開しました」と出たら", body: () => [
+      box("", "AI がこう出します。この URL を上の「あなたの値」に入れると、このあとの手順があなたの値になります。"),
+      code(`✓ MIRU を公開しました: ${urlOr()}`, placeholders()),
+      box("", "まだログインはできません（「ログインはまだ用意されていません」と出ます）。次の Google の設定で使えるようになります。"),
+    ] },
+  ] },
+  { id: "google", title: "Google でログインできるようにする", steps: [
+    { id: "project", who: "you", t: "プロジェクトを作る", d: "Google Cloud", body: () => [
+      steps(`${link("https://console.cloud.google.com/projectcreate", "Google Cloud の新しいプロジェクト")} を開く`, "名前を <b>MIRU</b> にして「作成」", "上の「プロジェクトを選択」で MIRU が選ばれていることを確かめる"),
+    ] },
+    { id: "consent", who: "you", t: "ログインの画面を作る", d: "Google Auth Platform", body: () => [
+      steps(`${link("https://console.cloud.google.com/auth/overview", "Google Auth Platform")} を開いて「開始」`,
+        "アプリ名: <b>MIRU</b>（ログインの画面に出ます）", `ユーザー サポートメール: ${esc(email())}`, "対象: <b>外部</b>", `連絡先: ${esc(email())}`, "「作成」"),
+    ] },
+    { id: "client", who: "you", t: "クライアントを作る", d: "2 つの URL を貼る", body: () => [
+      steps(`${link("https://console.cloud.google.com/auth/clients", "クライアント")} →「クライアントを作成」`, "アプリケーションの種類: <b>ウェブ アプリケーション</b>", "下の 2 つを貼って「作成」"),
+      lbl("承認済みの JavaScript 生成元"), code(urlOr(), placeholders()),
+      lbl("承認済みのリダイレクト URI"), code(`${urlOr()}/auth/callback`, placeholders()),
+      box("気をつけること", "最後に「/」を付けない。一字一句同じでないと「redirect_uri_mismatch」になります。", "warn"),
+    ] },
+    { id: "publish", who: "you", t: "アプリを公開する", d: "本番環境にする", body: () => [
+      steps(`${link("https://console.cloud.google.com/auth/audience", "対象")} を開く`, "「アプリを公開」→「確認」", "公開ステータスが「本番環境」になったことを確かめる"),
+      box("なぜ？", "テストのままだと、テストユーザーに入れた人しかログインできません。MIRU はメール・名前・写真だけを使うので、Google の審査はいりません。"),
+    ] },
+    { id: "clientid", who: "ai", t: "クライアント ID を AI に渡す", d: "…apps.googleusercontent.com", body: () => [
+      box("", "クライアントの画面の「クライアント ID」（<span class=\"mono\">…apps.googleusercontent.com</span>）をコピーして、AI に貼ります。AI が次を動かします。"),
+      code(setupCmd("google --client-id <クライアントID>")),
+      box("渡してよいのは ID だけ", "「クライアント シークレット」（<span class=\"mono\">GOCSPX-</span> で始まる値）は AI に渡さないでください。次の手順で自分で入れます。", "warn"),
+    ] },
+    { id: "secret", who: "you", t: "シークレットを自分で入れる", d: "自分のターミナルで", body: () => [
+      box("", `${W() ? "PowerShell" : "ターミナル"}で動かし、聞かれたらクライアント シークレットを貼って Enter（画面には出ません）。`),
+      code(secretCmd()),
+      ...(W() ? [box("", "「このシステムではスクリプトの実行が無効」と出たら、npx ではなく npx.cmd になっているか確かめます。")] : []),
+      box("チャットに貼ってしまったら", "Google Cloud のクライアントの画面でシークレットを作り直し、新しい方を入れます。", "warn"),
+    ] },
+  ] },
+  { id: "finish", title: "仕上げ", steps: [
+    { id: "check", who: "ai", t: "通し確認", d: "AI に「MIRU を確かめて」", body: () => [
+      box("", "AI に「MIRU を確かめて」と送るか、自分で動かします。✗ の行には「→」で直し方が出ます。"),
+      code(setupCmd("check")),
+      box("全部通ると", "「✓ 通し確認は全部通りました」と出ます。", "ok"),
+    ] },
+    { id: "login", who: "you", t: "ログインする", d: "あなたの MIRU を開く", body: () => [
+      url() ? openBtn(url(), "あなたの MIRU を開く") : box("", "上の「あなたの値」に workers.dev の名前を入れると、ここから開けます。"),
+      steps(`「Google でログイン」→ ${esc(email())} を選ぶ`, "ホームが出れば完成です"),
+      box("「招待されていません」と出たら", "start に入れたメールと、選んだアカウントが違います。「困ったとき」を見てください。", "warn"),
+    ] },
+    { id: "connect", who: "you", t: "Claude Code・Codex とつなぐ", d: "鍵を作ってコマンドを貼る", body: () => [
+      steps("MIRU の「設定」→「Claude Code・Codex とつなぐ」→「鍵を作る」",
+        S.ai === "claude" ? "1 行目のコマンド（<span class=\"mono\">claude mcp add …</span>）をターミナルに貼る" : `「${W() ? "Windows" : "Mac"} 用をコピー」を押してターミナルに貼り、Codex を開き直す`,
+        "「鍵だけコピー」を押して、画面のコマンドを貼る（動画を上げる道具が使います）"),
+      box("鍵の期限", "1 年で切れます。切れたら同じ画面で作り直します。鍵（miru_…）は人や AI のチャットに貼らないでください。"),
+    ] },
+    { id: "invite", who: "you", opt: true, t: "人を招待する", d: "見せたい人がいるとき", body: () => [
+      steps("「設定」→ チャンネル → メールと役割（管理者・指示できる・見るだけ）→「招待する」", "「招待した人に送る案内をコピー」を押し、LINE やメールで相手に送る", "相手は、そのメールの Google アカウントでログインします"),
+      box("", "MIRU からはメールが送られません。最初のチャンネルは、AI動画編集 lite が初めて動画を上げるときに自動で作ります。"),
+    ] },
+  ] },
+];
+const ALL = PHASES.flatMap((p) => p.steps);
+
+// ── 困ったとき ──
+const TROUBLES = [
+  { id: "r2", g: "cf", c: ["#ff9f0a", "#ff6a3d"], t: "R2 がまだ使える状態になっていません", k: "R2 10042 enable 支払い カード", body: () => [steps(`${link("https://dash.cloudflare.com/?to=/:account/r2/overview", "ダッシュボードの R2")} で有効にする`, "同じコマンドをもう一度（作ったものはそのまま続きから）"), box("", "10GB までは請求されません。")] },
+  { id: "subdomain", g: "cf", c: ["#3d9bff", "#0a72e8"], t: "workers.dev の名前がまだ決まっていません", k: "workers.dev subdomain onboarding サブドメイン 名前", body: () => [steps("出たリンク（…/workers/onboarding）で英字の名前を登録", "同じコマンドをもう一度")] },
+  { id: "multi", g: "cf", c: ["#5e5ce6", "#7a5cff"], t: "Cloudflare のアカウントが複数あります", k: "More than one account account_id --account 複数", body: () => [box("", "出た一覧から使うアカウントの ID を選び、AI に伝えます。AI が --account を付けて動かし直します。"), code(setupCmd(`start --owner ${email()} --account <アカウントID>`), placeholders())] },
+  { id: "verify", g: "cf", c: ["#ff9f0a", "#ffb340"], t: "Cloudflare のメールアドレスの確認がまだです", k: "verify email 10034 確認 メール", body: () => [steps("Cloudflare から届いたメールの確認のリンクを押す（迷惑メールの中も探す）", "同じコマンドをもう一度")] },
+  { id: "exists", g: "cf", c: ["#8a94a6", "#5b6577"], t: "もう「miru」という名前の D1 があります", k: "D1 already exists --reuse --name 名前 ぶつかる", body: () => [box("", "前に立てた MIRU を使い直すなら --reuse、別に立てるなら --name 別の名前。AI に「前のを使う」か「別に立てる」と伝えます。")] },
+  { id: "notready", g: "g", c: ["#3d9bff", "#7a5cff"], t: "ログインはまだ用意されていません", k: "503 ログイン 用意 client secret", body: () => [box("", "Google の設定がまだです。クライアント ID（AI に渡す）とシークレット（自分で入れる）の両方が要ります。"), code(secretCmd()), code(setupCmd("check"))] },
+  { id: "redirect", g: "g", c: ["#ff3b30", "#ff6a3d"], t: "redirect_uri_mismatch", k: "redirect_uri_mismatch リダイレクト 400 エラー", body: () => [box("", "Google Cloud のクライアントの「承認済みのリダイレクト URI」を、これと一字一句同じにします（最後に / を付けない）。"), code(`${urlOr()}/auth/callback`, placeholders()), box("", "保存してから数分かかることがあります。")] },
+  { id: "blocked", g: "g", c: ["#ff3b30", "#c22c24"], t: "アクセスをブロック・このアプリは確認されていません", k: "access_denied 403 ブロック テストユーザー 確認されていません 本番", body: () => [steps(`${link("https://console.cloud.google.com/auth/audience", "対象")} を開く`, "「アプリを公開」→ 本番環境にする")] },
+  { id: "denied", g: "miru", c: ["#5e5ce6", "#3d9bff"], t: "「招待されていません」と出て入れない", k: "招待されていません denied 入れない owner 持ち主", body: () => [box("", "start に入れたメールと、ログインしたアカウントが違います。AI に「MIRU の持ち主を確かめて」と頼むか、動かします。"), code(setupCmd("status")), box("", "違っていたら、正しいメールで start をもう一度。"), code(setupCmd(`start --owner ${email()}`), placeholders())] },
+  { id: "invitee", g: "miru", c: ["#30b45a", "#2a9f4f"], t: "招待した人が入れない", k: "招待 相手 入れない Gmail 点", body: () => [box("", "相手が、招待したメールの Google アカウントでログインしているか確かめます。Gmail は点の有無が違っても同じ人として入れます。")] },
+  { id: "quota", g: "miru", c: ["#ff9f0a", "#ff6a3d"], t: "容量の上限（9.0GB）を超えます", k: "402 容量 上限 9GB quota 足りない", body: () => [box("", "動画のパネルで前の版を左にスワイプして消すと空きます。超えた分を払ってよいなら、上限を上げます（10GB を超えた分は 1GB あたり月数円）。"), code(setupCmd("quota --gb 30"))] },
+  { id: "ps", g: "pc", c: ["#0a72e8", "#3d9bff"], t: "このシステムではスクリプトの実行が無効", k: "PowerShell npx.cmd ExecutionPolicy スクリプト 無効 Windows", body: () => [box("", "Windows の PowerShell で npx を使うと止まることがあります。npx.cmd を使います。"), code("cd $HOME\\MIRU\nnpx.cmd wrangler secret put GOOGLE_CLIENT_SECRET")] },
+  { id: "node", g: "pc", c: ["#30b45a", "#5fd07f"], t: "Node.js 20 以上が要ります・node が見つかりません", k: "node command not found Node.js バージョン", body: () => [steps(`${link("https://nodejs.org/", "nodejs.org")} から LTS を入れる`, "ターミナルを開き直して node -v")] },
+  { id: "conflict", g: "miru", c: ["#7a5cff", "#5e5ce6"], t: "同じ所でぶつかったので、まだ公開していません", k: "update ぶつかった 6 conflict resolved", body: () => [box("", "自分で直した所と新しい版が同じ所を変えていました。AI に「ぶつかった所を直して公開して」と頼むと、両方を入れてから公開します。"), code(setupCmd("deploy --resolved"))] },
+  { id: "tsc", g: "miru", c: ["#ff3b30", "#ff6a3d"], t: "型の確認で止まりました", k: "tsc 型 deploy エラー 直した", body: () => [box("", "自分用に直した所に間違いがあります（公開はしていません）。AI にエラーを見せて「直して公開して」と頼みます。")] },
+  { id: "aiformat", g: "miru", c: ["#8a94a6", "#5b6577"], t: "修正指示の「AI で整える」が働かない", k: "AI 整える Workers AI 働かない", body: () => [box("", "Workers AI の無料の範囲を超えたか、使っている型が有料プラン向けです。文はそのまま残るので、修正には困りません。")] },
+  { id: "issue", g: "help", c: ["#0f172a", "#475569"], t: "それでも直らない", k: "Issues 問い合わせ 質問 バグ", body: () => [box("", "通し確認の結果を添えて、GitHub の Issues に書いてください（テンプレートがあります）。"), openBtn(`https://github.com/${LITE}/issues/new/choose`, "Issues に書く"), box("貼らないもの", "シークレットと鍵（GOCSPX-・miru_ で始まる値）。", "warn")] },
+];
+
+// ── そのあと ──
+const AFTERS = [
+  { id: "update", ic: "↻", g: "miru", c: ["#3d9bff", "#7a5cff"], t: "新しい版にする", d: "設定の「この MIRU」に出たら", body: () => [
+    box("", "AI にこう頼むと、lite を更新してから MIRU を入れ替えます。データと設定はそのまま、更新の前に控えを取ります。"),
+    code("AI動画編集 lite と MIRU を新しい版にして"),
+    lbl("自分で動かすなら"), code(pluginUpdate()), code(`node <新しい MIRU の場所>/tools/setup.mjs update`),
+    box("直した所は？", "残ります。同じ所を新しい版も変えていたときだけ止まり、どのファイルかを言います。"),
+  ] },
+  { id: "custom", ic: "✎", g: "miru", c: ["#7a5cff", "#c05cff"], t: "自分用に直す", d: "あなたの MIRU だけが変わる", body: () => [
+    box("", "AI に、直したいことをそのまま頼みます。"),
+    code("MIRU のホームの動画を新しい順に並べて"),
+    steps("AI が ~/MIRU を直して、型の確認をしてから公開します", "直したファイルの一覧はこれで見られます"),
+    code(setupCmd("changes")),
+    box("編集のスキル（lite）を直したいとき", `作風や続けるルールは AI に言えば覚え直します。しくみそのものを変えるなら、GitHub で ${esc(LITE)} をフォークして、自分のフォークから入れます（元の新しい版は「Sync fork」で取り込めます）。`),
+  ] },
+  { id: "quota", ic: "GB", g: "miru", c: ["#ff9f0a", "#ff6a3d"], t: "容量と費用", d: "9GB で止まる", body: () => [
+    box("", "置いた量が 9GB になると、新しい版を受け付けません（R2 の無料の 10GB を超えて請求されないように）。いまの量は MIRU の「設定 → 容量」で見られます。"),
+    lbl("上限を変える（10GB を超えた分は、Cloudflare から 1GB あたり月数円の請求があります）"), code(setupCmd("quota --gb 30")),
+    box("", `最新の値: ${link("https://developers.cloudflare.com/r2/pricing/", "R2 の料金")}`),
+  ] },
+  { id: "backup", ic: "⇩", g: "miru", c: ["#30b45a", "#2a9f4f"], t: "控えを取る", d: "文字のデータ（D1）", body: () => [
+    code(setupCmd("backup")),
+    box("", "~/MIRU/backups/ に入ります。新しい版にするときは自動で取ります。動画の元は、手元の案件フォルダーにあります。"),
+  ] },
+  { id: "quit", ic: "×", g: "help", c: ["#8a94a6", "#5b6577"], t: "やめる", d: "Cloudflare と Google から消す", body: () => [
+    steps("控えを取る", "Cloudflare のダッシュボードで、Workers & Pages の miru・D1 の miru・R2 の miru-media を消す（R2 は中を空にしてから。多いときはライフサイクル ルールで 1 日で消してから）", "Google Cloud の MIRU のプロジェクトを消す", "~/MIRU と ~/.config/miru を消す"),
+    box("", "消したものは戻せません。", "warn"),
+  ] },
+];
+
+// ── 描く ──
+const stateOf = (id) => S.steps[id] || "todo";
+const CHECK = `<svg viewBox="0 0 16 16"><path d="M3.5 8.4 6.6 11.4 12.6 4.8"/></svg>`;
+const CHEV = `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>`;
+const txt = (v) => (typeof v === "function" ? v() : v);
+function drawSteps() {
+  const box = $("#phases");
+  box.replaceChildren();
+  let i = 0;
+  const next = ALL.find((s) => stateOf(s.id) === "todo");
+  for (const p of PHASES) {
+    const n = p.steps.filter((s) => stateOf(s.id) !== "todo").length;
+    box.append(h(`<h2>${esc(p.title)}<span class="cnt${n === p.steps.length ? " full" : ""}">${n}/${p.steps.length}</span></h2>`));
+    const list = h(`<div class="steps"></div>`);
+    for (const s of p.steps) {
+      const st = stateOf(s.id);
+      const who = s.who === "ai" ? `<span class="tag ai">AI</span>` : `<span class="tag you">あなた</span>`;
+      const row = h(`<div class="sw" style="--i:${i++}">
+        <div class="under r"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg><span>できた</span></div>
+        <div class="under l"><span>${s.opt ? "出なかった" : "戻す"}</span></div>
+        <div class="glass step ${st}${next && next.id === s.id ? " next" : ""}" data-step="${s.id}" role="button" tabindex="0" aria-label="${esc(s.t)}">
+          <button class="mark" data-mark="${s.id}" aria-label="できたにする">${CHECK}</button>
+          <div class="grow"><div class="t">${esc(s.t)}${who}${s.opt ? `<span class="tag">出たとき</span>` : ""}</div><div class="d">${esc(txt(s.d))}</div></div>${CHEV}
+        </div></div>`);
+      list.append(row);
+      swipe(row, s);
+    }
+    box.append(list);
+  }
+  drawRing();
+  requestAnimationFrame(() => setTimeout(() => box.classList.add("quiet"), 900));   // 2 回目からは入ってくる動きをくり返さない
+}
+function drawRing() {
+  const done = ALL.filter((s) => stateOf(s.id) !== "todo").length;
+  $("#ringFg").style.strokeDashoffset = String(106.8 * (1 - done / ALL.length));
+  $("#ringTxt").textContent = done === ALL.length ? "✓" : String(done);
+}
+function setStep(s, st, el) {
+  const before = stateOf(s.id);
+  S.steps[s.id] = st; save();
+  const card = el ?? document.querySelector(`[data-step="${s.id}"]`);
+  if (card) {
+    card.classList.remove("todo", "done", "skip"); card.classList.add(st);
+    if (st === "done" && before !== "done") burst(card.querySelector(".mark"));
+  }
+  // 段の数と、次の手順の印だけ描き直す（カードは動かさない）
+  setTimeout(() => {
+    const y = scrollY; drawSteps(); scrollTo(0, y);
+    const all = ALL.every((x) => stateOf(x.id) !== "todo");
+    if (all && before === "todo") { toast("全部できました", "ok"); confetti(); }
+  }, 420);
+}
+function burst(el, n = 10) {
+  if (!el || matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+  const r = el.getBoundingClientRect();
+  const cols = ["#30b45a", "#5fd07f", "#3d9bff", "#ffd60a"];
+  for (let k = 0; k < n; k++) {
+    const a = (Math.PI * 2 * k) / n + Math.random() * 0.4, d = 26 + Math.random() * 22;
+    const sp = h(`<i class="spark"></i>`);
+    sp.style.cssText = `left:${r.left + r.width / 2 - 4}px;top:${r.top + r.height / 2 - 4}px;background:${cols[k % cols.length]};--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d}px`;
+    document.body.append(sp); setTimeout(() => sp.remove(), 1000);
+  }
+}
+const confetti = () => burst($("#ring"), 24);
+
+// ── 右へ・左へスワイプ ──
+function swipe(wrap, s) {
+  const card = wrap.querySelector(".step"), ur = wrap.querySelector(".under.r"), ul = wrap.querySelector(".under.l");
+  let x0 = 0, y0 = 0, dx = 0, on = false, locked = null;
+  const TH = 84;
+  card.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || e.target.closest(".mark")) return;
+    x0 = e.clientX; y0 = e.clientY; dx = 0; on = true; locked = null;
+  });
+  card.addEventListener("pointermove", (e) => {
+    if (!on) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if (locked === null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) { locked = Math.abs(mx) > Math.abs(my) ? "x" : "y"; if (locked === "x") { card.setPointerCapture(e.pointerId); card.classList.add("drag"); } }
+    if (locked !== "x") return;
+    dx = mx > 0 ? Math.min(mx, 160) * (mx > TH ? 0.85 : 1) : Math.max(mx, -160) * (mx < -TH ? 0.85 : 1);
+    card.style.transform = `translateX(${dx}px)`;
+    ur.style.opacity = dx > 0 ? String(Math.min(1, dx / TH)) : "0";
+    ul.style.opacity = dx < 0 ? String(Math.min(1, -dx / TH)) : "0";
+    ur.querySelector("svg").style.transform = `scale(${dx > TH ? 1.25 : 0.8 + Math.max(0, dx) / TH * 0.2})`;
+  });
+  const end = () => {
+    if (!on) return; on = false;
+    card.classList.remove("drag");
+    if (locked === "x") {
+      if (dx > TH) setStep(s, "done", card);
+      else if (dx < -TH) setStep(s, s.opt ? "skip" : "todo", card);
+      card.dataset.swiped = "1"; setTimeout(() => delete card.dataset.swiped, 50);
+    }
+    card.style.transform = ""; ur.style.opacity = "0"; ul.style.opacity = "0";
+  };
+  card.addEventListener("pointerup", end);
+  card.addEventListener("pointercancel", end);
+}
+
+// ── 下から出るパネル ──
+const sheet = $("#sheet"), scrim = $("#scrim");
+let sheetOpenFor = null;
+function openSheet(title, parts, footer = "") {
+  codes = [];
+  $("#sheetTitle").textContent = title;
+  const body = $("#sheetBody");
+  body.innerHTML = parts.join("") + footer;
+  sheet.hidden = false; scrim.hidden = false;
+  void sheet.offsetHeight;            // 出す前の位置を一度確かめてから動かす（rAF を待たない）
+  sheet.classList.add("on"); scrim.classList.add("on");
+  body.scrollTop = 0;
+  document.body.style.overflow = "hidden";
+  setTimeout(() => $("#sheetX").focus({ preventScroll: true }), 300);
+}
+function closeSheet() {
+  sheet.classList.remove("on"); scrim.classList.remove("on");
+  document.body.style.overflow = "";
+  sheetOpenFor = null;
+  setTimeout(() => { if (!sheet.classList.contains("on")) { sheet.hidden = true; scrim.hidden = true; } }, 450);
+}
+function openStep(id) {
+  const s = ALL.find((x) => x.id === id); if (!s) return;
+  sheetOpenFor = s;
+  const st = stateOf(id);
+  const footer = `<div class="btns">${st === "done" ? `<button class="btn" data-act="undo">戻す</button>` : `<button class="btn ok" data-act="done">${CHECK.replace('<svg', '<svg style="width:16px;height:16px" fill="none" stroke="currentColor" stroke-width="3"')}できた</button>`}${s.opt && st !== "skip" ? `<button class="btn" data-act="skip">出なかった</button>` : ""}</div>`;
+  openSheet(s.t, s.body(), footer);
+}
+$("#sheetX").addEventListener("click", closeSheet);
+scrim.addEventListener("click", closeSheet);
+addEventListener("keydown", (e) => { if (e.key === "Escape" && sheet.classList.contains("on")) closeSheet(); });
+$("#sheetBody").addEventListener("click", async (e) => {
+  const c = e.target.closest("[data-copy]");
+  if (c) { await copy(codes[Number(c.dataset.copy)], c); return; }
+  const a = e.target.closest("[data-act]");
+  if (a && sheetOpenFor) {
+    const s = sheetOpenFor;
+    if (a.dataset.act === "done") { setStep(s, "done"); toast(`「${s.t}」できました`, "ok"); }
+    if (a.dataset.act === "undo") { setStep(s, "todo"); toast("戻しました"); }
+    if (a.dataset.act === "skip") { setStep(s, "skip"); toast("出なかったにしました"); }
+    closeSheet();
+  }
+});
+// つまんで下へ引くと閉じる
+(() => {
+  let y0 = 0, dy = 0, on = false;
+  const down = (e) => { on = true; y0 = e.clientY; dy = 0; sheet.classList.add("drag"); e.target.setPointerCapture?.(e.pointerId); };
+  const move = (e) => { if (!on) return; dy = Math.max(0, e.clientY - y0); sheet.style.transform = `translateY(${dy}px)`; scrim.style.opacity = String(1 - Math.min(1, dy / 400)); };
+  const up = () => { if (!on) return; on = false; sheet.classList.remove("drag"); sheet.style.transform = ""; scrim.style.opacity = ""; if (dy > 110) closeSheet(); };
+  for (const el of [$("#grab"), sheet.querySelector("header")]) { el.addEventListener("pointerdown", down); el.addEventListener("pointermove", move); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); }
+})();
+
+// ── 知らせ ──
+const ICON = { ok: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>`,
+  err: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.2"/></svg>`,
+  "": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.2"/></svg>` };
+function toast(msg, kind = "", ms = 2400) {
+  const t = h(`<div class="toast ${kind}">${ICON[kind]}<span>${esc(msg)}</span></div>`);
+  const box = $("#toasts");
+  box.append(t);
+  while (box.children.length > 3) box.firstElementChild.remove();
+  setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 360); }, ms);
+}
+async function copy(text, btn) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const ta = h(`<textarea style="position:fixed;opacity:0"></textarea>`); ta.value = text; document.body.append(ta); ta.select();
+    try { document.execCommand("copy"); } catch {} ta.remove();
+  }
+  if (btn) { btn.classList.add("did"); btn.textContent = "コピー済み"; setTimeout(() => { btn.classList.remove("did"); btn.textContent = "コピー"; }, 1600); }
+  toast(/<|あなたの/.test(text) ? "コピーしました（印の所は自分の値に）" : "コピーしました", "ok");
+}
+
+// ── 切り替え（Mac / Windows・Claude Code / Codex）──
+function drawSeg(seg) {
+  const k = seg.dataset.key, cur = seg.querySelector(`[data-v="${S[k]}"]`) || seg.querySelector("button");
+  seg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === cur));
+  const pill = seg.querySelector("i");
+  pill.style.left = `${cur.offsetLeft}px`; pill.style.width = `${cur.offsetWidth}px`;
+}
+document.querySelectorAll(".seg").forEach((seg) => {
+  seg.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    S[seg.dataset.key] = b.dataset.v; save(); drawSeg(seg); drawSteps();
+    toast(`${b.textContent} に合わせました`);
+  });
+});
+
+// ── 入力の候補 ──
+function autocomplete(input, source, pick) {
+  let list = null, items = [], at = -1;
+  const close = () => { list?.remove(); list = null; at = -1; };
+  const show = () => {
+    items = source(input.value);
+    close();
+    if (!items.length) return;
+    list = h(`<div class="ac glass" role="listbox"></div>`);
+    items.forEach((it, i) => {
+      const b = h(`<button type="button" role="option">${it.html}${it.note ? `<small>${esc(it.note)}</small>` : ""}</button>`);
+      b.addEventListener("pointerdown", (e) => { e.preventDefault(); choose(i); });
+      list.append(b);
+    });
+    input.parentElement.append(list);
+  };
+  const mark = () => list?.querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", i === at));
+  const choose = (i) => { const it = items[i]; if (!it) return; pick ? pick(it) : (input.value = it.value, input.dispatchEvent(new Event("input"))); close(); };
+  input.addEventListener("input", show);
+  input.addEventListener("focus", show);
+  input.addEventListener("blur", () => setTimeout(close, 120));
+  input.addEventListener("keydown", (e) => {
+    if (!list) return;
+    if (e.key === "ArrowDown") { at = (at + 1) % items.length; mark(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { at = (at - 1 + items.length) % items.length; mark(); e.preventDefault(); }
+    else if (e.key === "Enter" && at >= 0) { choose(at); e.preventDefault(); }
+    else if (e.key === "Escape") close();
+  });
+}
+const hi = (s, q) => { const i = q ? s.toLowerCase().indexOf(q.toLowerCase()) : -1; return i < 0 ? esc(s) : esc(s.slice(0, i)) + `<mark>${esc(s.slice(i, i + q.length))}</mark>` + esc(s.slice(i + q.length)); };
+const DOMAINS = ["gmail.com", "icloud.com", "outlook.jp", "outlook.com", "yahoo.co.jp", "googlemail.com"];
+const emailIn = $("#email"), subIn = $("#sub");
+emailIn.value = S.email; subIn.value = S.sub;
+autocomplete(emailIn, (v) => {
+  const q = v.trim();
+  const hist = (S.hist.email || []).filter((x) => x !== q && x.startsWith(q.toLowerCase())).map((x) => ({ value: x, html: hi(x, q), note: "前に入れたもの" }));
+  if (!q) return hist.slice(0, 4);
+  const [name, dom = ""] = q.split("@");
+  const sug = q.includes("@") || name ? DOMAINS.filter((d) => d.startsWith(dom) && `${name}@${d}` !== q).map((d) => ({ value: `${name}@${d}`, html: hi(`${name}@${d}`, q) })) : [];
+  return [...hist, ...sug].slice(0, 6);
+});
+/** URL・名前のどちらを入れても、workers.dev の名前だけにする */
+const toSub = (v) => {
+  const s = v.trim().toLowerCase();
+  const m = /^(?:https?:\/\/)?(?:[a-z0-9-]+\.)?([a-z0-9-]+)\.workers\.dev\/?/.exec(s);
+  return m ? m[1] : s.replace(/^https?:\/\//, "").replace(/\.workers\.dev.*$/, "").replace(/[^a-z0-9-]/g, "");
+};
+autocomplete(subIn, (v) => {
+  const q = v.trim().toLowerCase();
+  const out = [];
+  if (q && /workers\.dev|https?:/.test(q) && toSub(q)) out.push({ value: toSub(q), html: `<b>${esc(toSub(q))}</b>`, note: `https://miru.${toSub(q)}.workers.dev として使う` });
+  for (const x of S.hist.sub || []) if (x !== q && x.startsWith(toSub(q))) out.push({ value: x, html: hi(x, toSub(q)), note: "前に入れたもの" });
+  return out.slice(0, 5);
+}, (it) => { subIn.value = it.value; subIn.dispatchEvent(new Event("input")); });
+const remember = (k, v) => { if (!v) return; S.hist[k] = [v, ...(S.hist[k] || []).filter((x) => x !== v)].slice(0, 5); save(); };
+let typing = 0;
+emailIn.addEventListener("input", () => { S.email = emailIn.value; save(); clearTimeout(typing); typing = setTimeout(drawSteps, 250); });
+emailIn.addEventListener("change", () => { const v = emailIn.value.trim().toLowerCase(); if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { remember("email", v); toast("メールを入れました", "ok"); } else if (v) toast("メールの形を確かめてください", "err"); });
+subIn.addEventListener("input", () => { S.sub = toSub(subIn.value); save(); drawHint(); clearTimeout(typing); typing = setTimeout(() => { drawSteps(); }, 250); });
+subIn.addEventListener("change", () => { subIn.value = S.sub; drawHint(); if (S.sub) { remember("sub", S.sub); refresh(true); } });
+function drawHint() { $("#urlHint").textContent = url() ? `あなたの MIRU: ${url()}` : "入れると、Google に入れる URL とコマンドがあなたの値になります"; }
+
+// ── あなたの MIRU を確かめる（下に引く・右上のボタン）──
+let checking = false;
+async function refresh(quiet = false) {
+  if (checking) return;
+  const dot = $("#dot"), t = $("#stTitle"), sub = $("#stSub"), btn = $("#refresh");
+  if (!url()) { dot.className = "dot"; t.textContent = "あなたの MIRU"; sub.textContent = "URL を入れると、動いているか確かめます"; if (!quiet) toast("workers.dev の名前を入れると確かめられます"); return; }
+  checking = true; btn.classList.add("spin");
+  t.textContent = "確かめています…"; sub.textContent = url();
+  const get = (u) => Promise.race([fetch(u, { cache: "no-store" }).then((r) => r.json()), new Promise((_, no) => setTimeout(() => no(new Error("timeout")), 9000))]);
+  try {
+    const [hRes, fRes] = await Promise.allSettled([get(`${url()}/api/health`), get(FEED)]);
+    const health = hRes.status === "fulfilled" ? hRes.value : null, feed = fRes.status === "fulfilled" ? fRes.value : null;
+    if (!health) { dot.className = "dot bad"; t.textContent = "まだ見つかりません"; sub.textContent = `${url()} が開けません（まだ公開していないか、名前が違います）`; if (!quiet) toast("あなたの MIRU が見つかりません", "err"); return; }
+    if (!health.ok) { dot.className = "dot warn"; t.textContent = "動いていますが、データベースに届きません"; sub.textContent = "AI に「MIRU を確かめて」と頼みます"; if (!quiet) toast("データベースに届きません", "err"); return; }
+    const have = health.version?.build || 0, latest = feed?.build || 0;
+    if (latest && have < latest) { dot.className = "dot warn"; t.textContent = `動いています・新しい版があります`; sub.textContent = `いま 版 ${have || "?"} → 新しい版 ${latest}（${feed.date}）。「そのあと」から`; if (!quiet) toast("新しい版があります"); }
+    else { dot.className = "dot ok"; t.textContent = "動いています"; sub.textContent = `${health.edition === "light" ? "MIRU ライト" : "MIRU"}${have ? `・版 ${have}（${health.version.date}）` : ""}`; if (!quiet) toast("あなたの MIRU は動いています", "ok"); }
+  } finally { checking = false; btn.classList.remove("spin"); }
+}
+$("#refresh").addEventListener("click", () => refresh());
+
+// 下に引いて離すと確かめ直す
+(() => {
+  const ptr = $("#ptr");
+  let y0 = null, d = 0;
+  addEventListener("touchstart", (e) => { y0 = scrollY <= 0 && !sheet.classList.contains("on") ? e.touches[0].clientY : null; d = 0; ptr.classList.remove("go"); }, { passive: true });
+  addEventListener("touchmove", (e) => {
+    if (y0 === null) return;
+    d = Math.max(0, e.touches[0].clientY - y0);
+    const p = Math.min(1, d / 90), pull = Math.min(110, d * 0.55);
+    ptr.style.opacity = String(p);
+    ptr.style.transform = `translateY(${pull - 60}px) scale(${0.6 + p * 0.4}) rotate(${d * 2.2}deg)`;
+  }, { passive: true });
+  addEventListener("touchend", async () => {
+    if (y0 === null) return;
+    y0 = null;
+    ptr.classList.add("go");
+    if (d > 90) {
+      ptr.style.transform = "translateY(26px) scale(1)"; ptr.classList.add("run");
+      await Promise.all([refresh(), new Promise((r) => setTimeout(r, 700))]);
+      ptr.classList.remove("run");
+    }
+    ptr.style.opacity = "0"; ptr.style.transform = "translateY(-70px) scale(.6)";
+  });
+})();
+
+// ── 困ったとき・そのあと ──
+const GROUP = { cf: "CF", g: "G", miru: "M", pc: "PC", help: "?" };
+function itemRow(x, i, hiq = "") {
+  return h(`<button class="glass item" style="--i:${i};--c1:${x.c[0]};--c2:${x.c[1]}" data-item="${x.id}">
+    <span class="ic">${x.ic ?? GROUP[x.g] ?? "?"}</span>
+    <span class="grow"><span class="t" style="display:block">${hiq ? hi(x.t, hiq) : esc(x.t)}</span>${x.d ? `<span class="d" style="display:block">${esc(x.d)}</span>` : ""}</span>${CHEV}</button>`);
+}
+const norm = (s) => s.toLowerCase().normalize("NFKC");
+const matches = (x, q) => { const n = norm(q).trim(); return !n || n.split(/\s+/).every((w) => norm(`${x.t} ${x.k}`).includes(w)); };
+function drawTroubles(q = "") {
+  const box = $("#troubles"); box.replaceChildren();
+  const hits = TROUBLES.filter((x) => matches(x, q));
+  hits.forEach((x, i) => box.append(itemRow(x, i, q.trim())));
+  if (!hits.length) box.append(h(`<div class="empty">見つかりません。言葉を短くするか、「それでも直らない」から Issues へ</div>`));
+}
+function drawAfters() { const box = $("#afters"); box.replaceChildren(); AFTERS.forEach((x, i) => box.append(itemRow(x, i))); }
+const qIn = $("#q");
+autocomplete(qIn, (v) => TROUBLES.filter((x) => v.trim() && matches(x, v)).slice(0, 5).map((x) => ({ value: x.t, html: hi(x.t, v.trim()), id: x.id })),
+  (it) => { qIn.value = it.value; drawTroubles(it.value); openItem(it.id); });
+qIn.addEventListener("input", () => drawTroubles(qIn.value));
+function openItem(id) { const x = TROUBLES.find((y) => y.id === id); if (x) openSheet(x.t, x.body()); }
+document.addEventListener("click", (e) => {
+  const mk = e.target.closest("[data-mark]");
+  if (mk) { const s = ALL.find((x) => x.id === mk.dataset.mark); setStep(s, stateOf(s.id) === "done" ? "todo" : "done"); e.stopPropagation(); return; }
+  const st = e.target.closest("[data-step]");
+  if (st && !st.dataset.swiped) { openStep(st.dataset.step); return; }
+  const it = e.target.closest("[data-item]");
+  if (it) { const list = it.closest("#afters") ? AFTERS : TROUBLES; const x = list.find((y) => y.id === it.dataset.item); if (x) openSheet(x.t, x.body()); }
+});
+document.addEventListener("keydown", (e) => { const st = e.target.closest?.("[data-step]"); if (st && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openStep(st.dataset.step); } });
+
+// ── 下のタブ ──
+let tab = "steps";
+function drawPill() { const b = $(`#tabs button[data-tab="${tab}"]`), p = $("#pill"); p.style.left = `${b.offsetLeft}px`; p.style.width = `${b.offsetWidth}px`; }
+function go(t) {
+  if (t === tab) { scrollTo({ top: 0, behavior: "smooth" }); return; }
+  const run = () => {
+    tab = t;
+    document.querySelectorAll("section[data-tab]").forEach((s) => (s.hidden = s.dataset.tab !== t));
+    document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+    drawPill(); scrollTo(0, 0);
+  };
+  document.startViewTransition && !matchMedia("(prefers-reduced-motion:reduce)").matches ? document.startViewTransition(run) : run();
+}
+$("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) go(b.dataset.tab); });
+$("#ring").addEventListener("click", () => {
+  go("steps");
+  const next = ALL.find((s) => stateOf(s.id) === "todo");
+  if (!next) { toast("全部できています", "ok"); return; }
+  setTimeout(() => { const el = document.querySelector(`[data-step="${next.id}"]`); el?.scrollIntoView({ behavior: "smooth", block: "center" }); el?.classList.add("pulse"); setTimeout(() => el?.classList.remove("pulse"), 2100); }, 80);
+});
+addEventListener("resize", () => { drawPill(); document.querySelectorAll(".seg").forEach(drawSeg); });
+
+// ── はじめ ──
+drawSteps(); drawTroubles(); drawAfters(); drawHint();
+const ready = () => {
+  document.querySelectorAll(".seg").forEach(drawSeg); drawPill();
+  const sk = $("#skel"); sk.classList.add("gone"); setTimeout(() => sk.remove(), 650);
+  if (url()) refresh(true);
+};
+const t0 = performance.now();
+const fontsReady = document.fonts?.ready ?? Promise.resolve();
+Promise.all([fontsReady, new Promise((r) => (document.readyState === "complete" ? r() : addEventListener("load", r, { once: true })))])
+  .then(() => setTimeout(ready, Math.max(0, 450 - (performance.now() - t0))));
+})();
+</script>
+</body>
+</html>

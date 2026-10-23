@@ -69,7 +69,15 @@ async function boot() {
       ...Object.fromEntries(["x", "y", "width", "height"].filter((k) => k in L).map((k) => [k, L[k]])),       // 画面で置き直した画像
       ...(L.type === "video" ? { src: Number(L.source_start_seconds ?? 0) } : {}) }));
     const camera = (p.camera ?? []).map(({ _o, ...c }: Json) => c);
-    const marks = remapSpans(m.marks ?? [], ed.ops);
+    // the name card and the title band follow other moves (a title piece steps aside for a moved emphasis): their marks
+    // are read again from the moved layers instead of remapped
+    const marks: Json[] = remapSpans((m.marks ?? []).filter((x: Json) => x.kind !== "name" && x.kind !== "title"), ed.ops) as Json[];
+    for (const L of layers as Json[]) {
+      const id = String(L.id ?? "");
+      if (id.startsWith("namecard-")) marks.push({ kind: "name", start: L.start, end: L.end, label: "名札" });
+      else if (id.startsWith("hdr-l") && L.role === "header") marks.push({ kind: "title", start: L.start, end: L.end, label: "タイトル" });
+    }
+    marks.sort((x: Json, y: Json) => x.start - y.start || x.end - y.end);
     for (const r of ed.retimed) {
       const kind = r.kind === "large_qr" ? "qr" : r.kind;
       const mk = marks.find((x: Json) => x.kind === kind && x.start === r.from[0]);
@@ -114,6 +122,7 @@ async function boot() {
       if (p === "/api/manifest") return reply({ ...(await editedManifest()), previews: ready.map((x) => x.name).reverse(), name: ver, comments_file: "MIRU", caption_edits_file: "MIRU", cut_edits_file: "MIRU" });
       if (p === "/api/comments") return reply(method === "POST" ? await saveComments(body()) : await loadComments());
       if (p === "/api/caption-edits") {
+        if (method !== "POST" && bootCaps) { const d = bootCaps; bootCaps = null; return reply(d); }   // 起動で読んだばかり
         if (method === "POST") {
           if (role === "viewer") return reply({ error: "見るだけの権限です" }, 403);
           caps = await api(`/api/videos/${enc(vid)}/edits/caption`, { method: "PUT", json: body() });
@@ -123,6 +132,7 @@ async function boot() {
         return reply(caps);
       }
       if (p === "/api/cut-edits") {
+        if (method !== "POST" && bootCuts) { const d = bootCuts; bootCuts = null; return reply(d); }
         if (method === "POST") {
           if (role === "viewer") return reply({ error: "見るだけの権限です" }, 403);
           cuts = await api(`/api/videos/${enc(vid)}/edits/cut`, { method: "PUT", json: body() });
@@ -213,9 +223,38 @@ async function boot() {
   const header = document.querySelector("header") ?? document.body;
   header.prepend(home);
 
-  // 先に今の手直しを読んでおく（最初の /api/manifest で使う）
+  // 先に今の手直しを読んでおく（最初の /api/manifest で使い、ページが続けて取りに来る分にもそのまま返す）
   [cuts, caps] = await Promise.all([api(`/api/videos/${enc(vid)}/edits/cut`), api(`/api/videos/${enc(vid)}/edits/caption`)]);
+  bootCuts = cuts; bootCaps = caps;
   window.__miruStart?.();
+  prefetchImages(manifest, base, ver);
+}
+let bootCuts: Json | null = null, bootCaps: Json | null = null;
+
+/** 字幕・強調などの画像を、出る順に裏で先に読んでおく（2026-10-23「テロップの表示が間に合わない」）。
+ *  ページは出る 5 秒前に 1 枚ずつ取りに行くので、通信が遅いと間に合わなかった。ページと同じ URL で取り、ブラウザの
+ *  キャッシュに入れておく（画像を開いたまま持たない: 数百枚を展開するとメモリが足りない）。再生を邪魔しないよう 4 本ずつ。 */
+function prefetchImages(manifest: Json, base: string, ver: string) {
+  const v = encodeURIComponent(`${ver}-${manifest.built_at ?? ""}`);
+  const flat = !!manifest.flat;
+  const live = (L: Json) => L.role === "caption" || L.role === "header" || L.role === "small_qr" || /^(qr-q|qrbg-|thumb)/.test(String(L.id ?? ""));
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  for (const L of [...(manifest.layers as Json[])].sort((a, b) => a.start - b.start)) {
+    if (L.type !== "image" || !L.media || seen.has(L.media) || (flat && !live(L))) continue;
+    seen.add(L.media); keys.push(L.media);
+  }
+  const start = Number(q.get("f") ?? 0) || 0;            // 途中から開いたときは、そこから先を先に
+  const at = (manifest.layers as Json[]).reduce((m: Map<string, number>, L: Json) => (m.has(L.media) ? m : m.set(L.media, L.start)), new Map());
+  keys.sort((a, b) => ((at.get(a) ?? 0) < start ? 1 : 0) - ((at.get(b) ?? 0) < start ? 1 : 0));
+  let i = 0;
+  const next = async (): Promise<void> => {
+    while (i < keys.length) {
+      const k = keys[i++];
+      try { const r = await realFetch(`${base}media/${k}?v=${v}`, { credentials: "same-origin" }); await r.arrayBuffer(); } catch { /* 次へ */ }
+    }
+  };
+  setTimeout(() => { for (let n = 0; n < 4; n++) void next(); }, 1500);   // 最初の映像と音を先に
 }
 
 window.MIRU_CLOUD = 1;

@@ -611,6 +611,15 @@ export class Edit {
     }
   }
 
+  private stepAsideHeader(s0: number, e0: number, a: number, b: number): void {
+    for (const x of (this.plan.layers ?? []) as El[]) {
+      if (get(x, 'role') === 'header') {
+        if (x.end === s0) x.end = a;
+        else if (x.start === e0) x.start = b;
+      }
+    }
+  }
+
   // -- an emphasis or a large QR shown at another time, with what belongs to it
   retime(it: El): void {
     const tid = it.target.id, kind = it.target.kind;
@@ -680,6 +689,7 @@ export class Edit {
           c.end = b;
         }
       }
+      this.stepAsideHeader(s0, e0, a, b);      // the title steps aside for the emphasis wherever it goes
     } else if (this.backdropPieces(suffix).length) {
       if (b - a < MIN_CAP) {
         this.warnings.push(`${tid}: too short after the move; left as it was`);
@@ -694,6 +704,17 @@ export class Edit {
       }
       this.stepAside(layers, s0, e0, a, b);
     } else {
+      if (kind === 'name' || kind === 'theme') {      // the name card / theme band stands in for the captions next to it: they give way / take back
+        const normal = layers.filter((x) => get(x, 'role') === 'caption' && !pyTruthy(get(x, 'parked')) && get(x, 'caption_kind', 'normal') !== 'emphasis');
+        const prev = normal.filter((x) => x.end === s0);
+        const nxt = normal.filter((x) => x.start === e0);
+        for (const x of prev) a = Math.max(a, x.start + MIN_CAP);
+        for (const x of nxt) b = Math.min(b, x.end - MIN_CAP);
+        if (b - a >= MIN_CAP) {
+          for (const x of prev) x.end = a;
+          for (const x of nxt) x.start = b;
+        }
+      }
       const group = layers.filter((x) => x.start === s0 && x.end === e0 && get(x, 'role') !== 'caption');
       for (const x of group) {       // the blurred background is a video: keep it inside its file
         if (get(x, 'type') === 'video') {

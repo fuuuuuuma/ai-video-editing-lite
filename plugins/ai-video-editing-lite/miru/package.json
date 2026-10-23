@@ -1,15 +1,16 @@
 {
-  "name": "miru",
-  "version": "0.1.0",
+  "name": "miru-light",
+  "version": "0.0.26",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --port 5190",
-    "build": "node tools/sync-review.mjs && vite build",
+    "build": "vite build",
     "worker": "wrangler dev -c wrangler.dev.jsonc --port 8790 --local",
     "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
-    "deploy": "npm run build && wrangler deploy",
-    "sync-review": "node tools/sync-review.mjs",
+    "test": "node --test tools/setup.test.mjs",
+    "deploy": "node tools/setup.mjs deploy",
+    "release-light": "node tools/release-light.mjs",
     "setup": "node tools/setup.mjs"
   },
   "devDependencies": {

@@ -19,7 +19,9 @@ export async function api<T = any>(path: string, opt: { method?: string; body?: 
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    if (res.status === 401 && !location.pathname.startsWith("/login")) location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
+    if (res.status === 401 && !location.pathname.startsWith("/login")) {
+      location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}${(data as { denied?: boolean }).denied ? "&denied=1" : ""}`;
+    }
     throw new ApiError(res.status, (data as { error?: string }).error ?? `うまくいきませんでした（${res.status}）`);
   }
   return data as T;

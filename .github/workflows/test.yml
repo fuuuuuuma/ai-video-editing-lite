@@ -1,0 +1,49 @@
+# 検査（Mac・Windows・Linux）。MIRU ライトを立てる道具はにせの wrangler で通す（本物の Cloudflare には触れない）
+name: test
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  miru-setup:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test plugins/ai-video-editing-lite/miru/tools/setup.test.mjs
+  miru-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/ai-video-editing-lite/miru
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run build
+  skill:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: plugins/ai-video-editing-lite/skills/ai-video-editing-lite
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install numpy pillow opencv-python-headless uharfbuzz fonttools
+      - run: python -m unittest discover -s tests

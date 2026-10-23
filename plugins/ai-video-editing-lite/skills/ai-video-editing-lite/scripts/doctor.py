@@ -44,6 +44,13 @@ item(bool(url), '自分の MIRU（確認サイトに上げるとき）', url or 
 tok = os.environ.get('MIRU_TOKEN') or ((Path.home() / '.config/miru/token').read_text().strip() if (Path.home() / '.config/miru/token').exists() else '')
 item(tok.startswith('miru_'), 'MIRU の鍵（確認サイトに上げるとき）', 'あり' if tok.startswith('miru_') else 'なし',
      '自分の MIRU に Google でログイン →「設定 → Claude Code・Codex とつなぐ」で鍵を作り、画面のコマンドで ~/.config/miru/token と url を置く', warn=True)
+if url and tok.startswith('miru_'):
+    import miru_sync
+    h = miru_sync.site_version()
+    note = miru_sync.version_note(h) if h else ''
+    ver = ((h or {}).get('version') or {})
+    item(bool(h) and not note, '自分の MIRU の版', f"版 {ver.get('build') or '?'}（{ver.get('date') or '-'}）" if h else 'つながりません',
+         note or f'{url} が開くか確かめる（miru-setup の「確かめる」: node <MIRU>/tools/setup.mjs check）', warn=True)
 free = shutil.disk_usage(str(Path.home())).free / 1e9
 item(free > 20, '空き容量', f'{free:.0f}GB', '作業用に 20GB ほど空ける（書き出しと一時ファイル）', warn=True)
 print(json.dumps(rows, ensure_ascii=False, indent=1))

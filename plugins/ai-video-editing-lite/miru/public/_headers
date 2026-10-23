@@ -1,0 +1,6 @@
+# 画面（index.html・review.html など、Worker を通らずに配る静的ファイル）にも、Worker と同じ守りのヘッダーを付ける（2026-10-23）
+/*
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: same-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

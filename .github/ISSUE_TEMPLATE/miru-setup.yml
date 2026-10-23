@@ -1,0 +1,38 @@
+name: MIRU ライトの導入・ログインで困った
+description: 立てる途中で止まった、ログインできない、Claude Code・Codex とつながらない
+labels: ["miru"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先に AI に「MIRU を確かめて」と頼むか、`node ~/MIRU/tools/setup.mjs check` を動かしてみてください。多くはそこで直す所が出ます。
+        **シークレットや鍵（`GOCSPX-`・`miru_` で始まる値）は、ここに貼らないでください。** 貼ってしまったら作り直してください。
+  - type: dropdown
+    id: where
+    attributes:
+      label: どこで止まりましたか
+      options:
+        - 立てる途中（setup.mjs start）
+        - Google の設定・ログイン
+        - Claude Code・Codex とつなぐ
+        - 新しい版にする（update）
+        - 自分用に直したあと（deploy）
+        - そのほか
+    validations: { required: true }
+  - type: textarea
+    id: check
+    attributes:
+      label: setup.mjs check の結果
+      description: そのまま貼ってください（URL は消してもかまいません）
+      render: text
+  - type: textarea
+    id: what
+    attributes:
+      label: 何をしたら、何が出ましたか
+    validations: { required: true }
+  - type: input
+    id: env
+    attributes:
+      label: パソコンと AI
+      placeholder: 例 Mac（Apple シリコン）・Claude Code / Windows 11・Codex
+    validations: { required: true }

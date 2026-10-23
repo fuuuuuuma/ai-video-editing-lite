@@ -43,16 +43,24 @@ AI が最近の動画を数本、分析用に短く取り込み、字幕や強�
 
 AI が文字起こしを全部読み、言い直し・「えー」などを切り、字幕と強調テロップを付けた確認用の動画を作って、MIRU のリンクを送ります。MIRU で気になる所に修正指示を書く（字幕の打ち直しやカットの戻しは画面で直接もできます）と、AI が取り込んで次の版を作ります。「書き出して」と言うと完成の MP4 を書き出します。YouTube への投稿は自分で行ってください。
 
-## MIRU（確認サイト）は自分の Cloudflare に立てる
+## MIRU ライト（確認サイト）は自分の Cloudflare に立てる
 
-MIRU は、できた動画を見て修正指示を書き込むサイトです。**あなた自身の Cloudflare アカウントに、あなた専用の MIRU を立てて使います**（動画も修正指示もあなたの Cloudflare の中だけ。見られるのはあなたと、あなたが招待した人だけ）。
+MIRU ライトは、できた動画を見て修正指示を書き込むサイトです。**あなた自身の Cloudflare アカウントに、あなた専用の MIRU を立てて使います**（動画も修正指示もあなたの Cloudflare の中だけ。入れるのはあなたと、あなたが招待した人だけ）。
 
-- 立て方: AI に **Claude Code は `/ai-video-editing-lite:miru-setup`、Codex は `$miru-setup`** と送ると、AI が手順を進めます。あなたがするのは、ブラウザでの許可と Google Cloud の設定、秘密の値の貼り付けだけです（20〜30 分）。
+- **導入ガイド（画面で見ながら進める）: https://fuuuuuuma.github.io/ai-video-editing-lite/** （同じものが [docs/index.html](docs/index.html)。スマホでも見られます）
+- 立て方: AI に **Claude Code は `/ai-video-editing-lite:miru-setup`、Codex は `$miru-setup`** と送ると、AI が手順を進めます。あなたがするのは、ブラウザでの許可と Cloudflare・Google Cloud の設定、秘密の値の貼り付けだけです（20〜30 分）。
 - 詳しい手順・費用・困ったとき: [plugins/ai-video-editing-lite/miru/SETUP.md](plugins/ai-video-editing-lite/miru/SETUP.md)
-- 費用: Cloudflare の無料の範囲で使えます（動画の置き場 R2 は 10GB まで無料、見られるたびの通信料はかかりません）。30 分の動画で 1 版目およそ 1GB、2 版目からは変わった分（数十 MB）だけ増えます。
+- 確かめる: AI に「MIRU を確かめて」と頼むと、サイト・Google の設定・この PC とのつながりを 1 つずつ確かめ、直す所を言います。
+- 費用: Cloudflare の無料の範囲で使えます（動画の置き場 R2 は 10GB まで無料、見られるたびの通信料はかかりません）。30 分の動画で 1 版目およそ 1GB、2 版目からは変わった分（数十 MB）だけ増えます。無料の範囲を超えないように、置いた量が 9GB になると止まります（上げることもできます）。
 - Claude Code・Codex とは、MIRU の「設定 → Claude Code・Codex とつなぐ」に出るコマンドを貼るとつながります。
 - MIRU を使わず、このパソコンの中だけで確認することもできます（http://localhost:8765/）。
-- 0.1.x で使っていた共用の MIRU（miru.pinpon-fuuma.workers.dev）には、新しくチャンネルを作れなくなりました。今あるチャンネルはそのまま見られます。新しい動画は自分の MIRU に上げてください。
+- 0.1.x で使っていた共用の MIRU は、新しくチャンネルを作れません（今あるチャンネルはそのまま見られます）。新しい動画は自分の MIRU ライトに上げてください。
+
+## 自分用に直す
+
+- **作風**（字幕・強調の見た目、カットの詰め方、続けるルール）: AI に言えば覚え直します（「強調は 1 分に 1 個まで」「縁をもっと太く」など）。覚えた内容は `~/.ai-video-editing-lite/` に残り、更新しても消えません。
+- **MIRU ライト**: あなたの Cloudflare で動くあなたのものです。AI に「MIRU の〇〇を直して」と頼むと、`~/MIRU` を直して公開し直します。**新しい版にしても、直した所は残ります**（あなたの変更と新しい版の変更を混ぜます。同じ所がぶつかったときだけ止まって知らせます）。
+- **スキルのしくみそのもの**: このリポジトリを GitHub で自分のアカウントにフォーク（Fork）して直し、自分のフォークから入れます（`claude plugin marketplace add あなたの名前/ai-video-editing-lite`）。元の新しい版は、GitHub の「Sync fork」で取り込めます。直したものを元に戻してほしいときは Pull request を送ってください。
 
 ## できること・できないこと
 
@@ -88,6 +96,13 @@ YouTube から取り込むのは、分析のための短い区間（低画質・
 claude plugin marketplace update ai-video-editing-lite && claude plugin update ai-video-editing-lite@ai-video-editing-lite
 codex plugin marketplace upgrade ai-video-editing-lite && codex plugin add ai-video-editing-lite@ai-video-editing-lite
 ```
+
+MIRU ライトを立てているなら、続けて AI に「MIRU を新しい版にして」と頼みます（MIRU の「設定 → この MIRU」にも、新しい版があると出ます）。何が変わったかは [CHANGELOG.md](CHANGELOG.md)。
+
+## 困ったとき・問い合わせ
+
+まず AI に「MIRU を確かめて」（MIRU のこと）か「doctor を動かして」（編集のこと）と頼むと、直す所を言います。
+直らないときは [Issues](https://github.com/fuuuuuuma/ai-video-editing-lite/issues) に書いてください（テンプレートがあります）。**シークレットや鍵（`GOCSPX-`・`miru_` で始まる値）は貼らないでください。**
 
 ## ライセンス
 

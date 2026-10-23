@@ -7,7 +7,7 @@
 type Shadow = { color: string; spread?: number; blur?: number; opacity?: number; dx?: number; dy?: number; enabled?: boolean };
 type Stroke = { width: number; color: string; enabled?: boolean };
 export type TextItem = {
-  font?: string | null; font_size?: number; color?: string; padding?: number; spacing?: number; proportional_spacing?: boolean;
+  font?: string | null; font_local?: string[]; font_size?: number; color?: string; padding?: number; spacing?: number; proportional_spacing?: boolean;
   strokes?: Stroke[]; shadows?: Shadow[]; stroke_width?: number; stroke_color?: string;
   fill_gradient?: { axis?: "vertical" | "horizontal"; stops: { position: number; color: string }[] };
   text_scale_x?: number; text_scale_y?: number; background?: string;
@@ -107,9 +107,24 @@ function gaussian(a: Float32Array, w: number, h: number, sigma: number): Float32
 }
 
 /** 文字の絵（RGBA の Float32、0〜255）と、白い字の範囲 */
+/** 見る人の PC に入っている書体（サイトに置けないヒラギノなど。Mac には最初から入っている） */
+function localFamily(names: string[]): Promise<string> {
+  const key = "local:" + names.join("|");
+  let p = loaded.get(key);
+  if (!p) {
+    const name = "miru-" + loaded.size;
+    p = new FontFace(name, names.map((n) => `local(${JSON.stringify(n)})`).join(", ")).load().then((f) => { document.fonts.add(f); return name; });
+    p.catch(() => loaded.delete(key));
+    loaded.set(key, p);
+  }
+  return p;
+}
+
 async function makeTextImage(item: TextItem, text: string, fontUrl: (key: string) => string) {
-  if (!item.font) throw new Error("この書体はサイトに置けないので、仮の表示にします");
-  const fam = await family(fontUrl(item.font));
+  if (!item.font && !item.font_local?.length) throw new Error("この書体はサイトに置けないので、仮の表示にします");
+  // 2026-10-23: 打ち直した字幕がヒラギノで描けず、別の書体になっていた（サイトに置けない書体）
+  const fam = item.font ? await family(fontUrl(item.font))
+    : await localFamily(item.font_local!).catch(() => { throw new Error("この書体はこの PC に無いので、仮の表示にします"); });
   const size = item.font_size ?? 60, spacing = item.spacing ?? 8;
   const strokes = (item.strokes?.length ? item.strokes : item.stroke_width ? [{ width: item.stroke_width, color: item.stroke_color ?? "black" }] : [])
     .filter((s) => s.enabled !== false);

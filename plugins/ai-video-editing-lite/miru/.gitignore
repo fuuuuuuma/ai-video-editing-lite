@@ -4,3 +4,7 @@ dist/
 .dev.vars
 wrangler.jsonc
 .miru-setup.json
+.miru-upstream/
+.miru-upstream-prev/
+.miru-update.json
+backups/

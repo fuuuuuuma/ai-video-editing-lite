@@ -3,7 +3,9 @@ import "./style.css";
 import { $, api, ago, autocomplete, esc, h, NOTE_STATUS, pullToRefresh, ROLE, sheet, skeleton, STATUS, swipeable, toast, transition } from "./ui";
 
 type Usage = { bytes: number; quota: number; channels: number; channelLimit: number };
-type Me = { user: { id: string; email: string; name: string; picture: string }; usage: Usage; channels: Channel[]; site?: { can_create: boolean; invite_only: boolean } };
+type Ver = { build: number; date: string; commit: string };
+type Site = { can_create: boolean; invite_only: boolean; edition?: "personal" | "light"; version?: Ver; update_feed?: string | null };
+type Me = { user: { id: string; email: string; name: string; picture: string }; usage: Usage; channels: Channel[]; site?: Site };
 type Channel = { id: string; name: string; color: string; role: string; videos: number; open: number; mine?: number };
 const gb = (n: number) => (n >= 1e15 ? "上限なし" : n < 1024 ** 3 ? `${Math.round(n / 1024 ** 2)}MB` : `${(n / 1024 ** 3).toFixed(1)}GB`);
 const day = (t: number) => new Date(t).toLocaleDateString("ja-JP");
@@ -76,10 +78,19 @@ const openCount = () => (me?.channels ?? []).reduce((s, c) => s + c.open, 0);
 // ── ログイン（ボタンだけ）──
 async function pageLogin() {
   const q = new URLSearchParams(location.search);
-  try { me = await fetch("/api/me").then((r) => (r.ok ? r.json() : null)); } catch { me = null; }
+  let denied = q.has("denied");
+  try {
+    const r = await fetch("/api/me");
+    const b = await r.json().catch(() => ({})) as Me & { denied?: boolean };
+    me = r.ok ? b : null;
+    denied ||= !!b.denied;
+  } catch { me = null; }
   if (me) { go(q.get("next") ?? "/", true); return; }
+  const site = await fetch("/api/site").then((r) => r.json()).catch(() => ({})) as { invite_only?: boolean };
   app.innerHTML = `<div class="login"><div class="box glass">
     <div class="mark">M</div><div class="name">MIRU</div>
+    ${denied ? `<div class="small" style="margin:0 0 14px;color:var(--bad)"><b>このアカウントは招待されていません。</b><br>招待してくれた人に、ログインしたい Google アカウントのメールアドレスを伝えて、招待してもらってください。別のアカウントで入るときは、もう一度ログインを押して選び直します。</div>`
+      : site.invite_only ? `<div class="small muted" style="margin:0 0 14px">招待されたメールアドレスの Google アカウントでログインしてください。</div>` : ""}
     <a class="gbtn" href="/auth/google?next=${encodeURIComponent(q.get("next") ?? "/")}">${ICON.google}Google でログイン</a>
     <div class="small" style="margin-top:18px"><a href="/privacy" data-go>プライバシーポリシー</a> ・ <a href="/terms" data-go>利用規約</a></div>
   </div></div>`;
@@ -89,24 +100,32 @@ async function pageLogin() {
 
 // ── プライバシーポリシー・利用規約（ログインしなくても見られる。Google のログイン画面からつながる）──
 async function pageDoc(kind: "privacy" | "terms") {
-  const contact = (await fetch("/api/site").then((r) => r.json()).catch(() => ({})) as { contact?: string }).contact || "このサイトの管理者";
+  const site = await fetch("/api/site").then((r) => r.json()).catch(() => ({})) as { contact?: string; invite_only?: boolean; edition?: string };
+  const contact = site.contact || "このサイトの管理者";
+  // 招待制（SITE_OWNERS あり。個人用と MIRU ライト）では、チャンネルを作れるのは持ち主だけ。誰でも作れる形のときだけ容量の話をする
+  const closed = !!site.invite_only;
   const sec = (t: string, d: string) => `<h2>${t}</h2><p class="small">${d}</p>`;
   const body = kind === "privacy" ? `
     ${sec("集める情報", "Google でログインしたときの名前・メールアドレス・プロフィール写真、修正指示と画面での手直し、チャンネルの管理者が上げた確認用の動画・画像・音、ログインを保つための cookie。")}
     ${sec("使い方", "ログインと、招待されたチャンネルの動画を見せること、修正指示と手直しを動画の制作に使うことだけに使います。広告には使いません。売ったり、第三者に渡したりしません。")}
     ${sec("置き場所", "Cloudflare（D1・R2）に置きます。ログインの印はそのままではなく SHA-256 で置きます。修正指示を読みやすく整える機能を使ったときは、その文を Cloudflare Workers AI で処理します。")}
-    ${sec("見られる人", "チャンネルを作った人と、その人が招待した人だけが、そのチャンネルの動画と指示を見られます。サイトの運営者にも、画面や道具から他の人のチャンネルを見る権限はありません（障害の調べものでデータベースに直接触れるときを除き、中身は見ません）。")}
-    ${sec("残す期間", "上げ終わらなかったプレビューは 2 日で、無料の容量で使っている人の古い版（各動画の新しい 2 つより前で 30 日たったもの）は自動で消えます。使われなくなったログインの印と、期限（1 年）の切れた鍵も消えます。")}
+    ${closed ? sec("見られる人", "このサイトに入れるのは、持ち主と、持ち主がチャンネルに招待した人だけです。チャンネルの動画と指示は、そのチャンネルに招待された人だけが見られます。")
+    : sec("見られる人", "チャンネルを作った人と、その人が招待した人だけが、そのチャンネルの動画と指示を見られます。サイトの運営者にも、画面や道具から他の人のチャンネルを見る権限はありません（障害の調べものでデータベースに直接触れるときを除き、中身は見ません）。")}
+    ${closed ? sec("残す期間", "上げ終わらなかったプレビューは 2 日で消えます。使われなくなったログインの印と、期限（1 年）の切れた鍵、招待を全部外された人の記録も消えます。")
+    : sec("残す期間", "上げ終わらなかったプレビューは 2 日で、無料の容量で使っている人の古い版（各動画の新しい 2 つより前で 30 日たったもの）は自動で消えます。使われなくなったログインの印と、期限（1 年）の切れた鍵も消えます。")}
     ${sec("消す", "チャンネルは設定の画面から、動画・版ごと消せます。アカウントごと消したいときは、下の連絡先までお知らせください。")}
     ${sec("連絡先", esc(contact))}` : `
-    ${sec("このサイト", "MIRU は、動画のプレビューを上げ、招待した人と一緒に見て修正指示を入れるためのサイトです。Google でログインした人は誰でも自分のチャンネルを作れます。")}
-    ${sec("容量", "無料で使える容量は 1 人あたり決まった量（いまは 2GB・チャンネル 3 つまで）です。超えると新しい版は上げられません。古い版を消して空けてください。上げるものは、自分で権利を持っている動画・画像・音だけにしてください。")}
+    ${closed ? sec("このサイト", `MIRU${site.edition === "light" ? " ライト" : ""} は、動画のプレビューを上げ、招待した人と一緒に見て修正指示を入れるためのサイトです。このサイトの持ち主（下の連絡先）が自分の Cloudflare で動かしています。チャンネルを作れるのは持ち主だけで、ほかの人は招待されたチャンネルだけを見られます。`)
+    : sec("このサイト", "MIRU は、動画のプレビューを上げ、招待した人と一緒に見て修正指示を入れるためのサイトです。Google でログインした人は誰でも自分のチャンネルを作れます。")}
+    ${closed ? sec("置くもの", "置ける量には上限があり、超えると新しい版は上げられません。上げるものは、自分で権利を持っている動画・画像・音だけにしてください。")
+    : sec("容量", "無料で使える容量は 1 人あたり決まった量（いまは 2GB・チャンネル 3 つまで）です。超えると新しい版は上げられません。古い版を消して空けてください。上げるものは、自分で権利を持っている動画・画像・音だけにしてください。")}
     ${sec("使ってよい範囲", "招待されたチャンネルの動画は、制作の確認のためだけに見てください。許可なく保存・配布・公開しないでください。")}
-    ${sec("止めること", "チャンネルの管理者は招待を外せます。運営者は、規約に反する使い方を見つけたときや、費用・障害の都合で、予告なくチャンネルを止めたり、サイトを止めたりすることがあります。")}
+    ${sec("止めること", closed ? "チャンネルの管理者は招待を外せます。持ち主は、費用・障害の都合などで、予告なくチャンネルやサイトを止めることがあります。"
+      : "チャンネルの管理者は招待を外せます。運営者は、規約に反する使い方を見つけたときや、費用・障害の都合で、予告なくチャンネルを止めたり、サイトを止めたりすることがあります。")}
     ${sec("保証", "サイトは現状のまま提供します。消えて困るものは、別に控えを残してください。")}
     ${sec("連絡先", esc(contact))}`;
   app.innerHTML = `<header class="top"><a class="logo" href="/" data-go><i>M</i>MIRU</a></header>
-    <main><div class="page"><h1>${kind === "privacy" ? "プライバシーポリシー" : "利用規約"}</h1><div class="glass card">${body}<p class="small muted">2026年10月21日</p></div></div></main>`;
+    <main><div class="page"><h1>${kind === "privacy" ? "プライバシーポリシー" : "利用規約"}</h1><div class="glass card">${body}<p class="small muted">2026年10月23日</p></div></div></main>`;
   document.title = `${kind === "privacy" ? "プライバシーポリシー" : "利用規約"} | MIRU`;
 }
 
@@ -177,16 +196,17 @@ async function videoSheet(v: Video, role: string) {
   try {
     const d = await api<{ versions: { name: string; ready: number; created_at: number; bytes: number; note: string }[]; openNotes: number; role: string }>(`/api/videos/${encodeURIComponent(v.id)}`);
     const ready = d.versions.filter((x) => x.ready);
+    const cutOnly = (x: { note: string }) => /カットだけ/.test(x.note ?? "");     // トンマナが無いときの仮編集（字幕と強調はまだ）
     const box = $("#vs", s.body)!;
     box.innerHTML = `
-      ${ready.length ? `<a class="btn primary wide" href="/v/${encodeURIComponent(v.id)}?ver=${encodeURIComponent(ready[0].name)}">${esc(ready[0].name)} を見る</a>` : `<div class="glass card small muted">まだプレビューが上がっていません</div>`}
+      ${ready.length ? `<a class="btn primary wide" href="/v/${encodeURIComponent(v.id)}?ver=${encodeURIComponent(ready[0].name)}">${esc(ready[0].name)} を見る</a>${cutOnly(ready[0]) ? `<div class="small muted" style="margin:8px 2px 0">カットだけの仮編集です（字幕と強調はまだ）</div>` : ""}` : `<div class="glass card small muted">まだプレビューが上がっていません</div>`}
       ${d.openNotes ? `<div class="small" style="margin:10px 2px 0">未対応の修正指示 <b>${d.openNotes}</b> 件</div>` : ""}
       ${role !== "viewer" ? `<h2>状態</h2><div class="seg" id="vst">${["editing", "review", "fixing", "done"].map((k) => `<button data-s="${k}" class="${v.status === k ? "on" : ""}">${STATUS[k]}</button>`).join("")}</div>` : ""}
       ${ready.length > 1 ? `<h2>前の版</h2><div class="list" id="vold"></div>` : ""}
       ${role === "owner" ? `<h2>管理</h2><button class="btn danger wide" id="vdel">この動画を消す</button>` : ""}`;
     const old = $("#vold", box);
     for (const x of ready.slice(1)) {
-      const row = h(`<a class="glass row-item" href="/v/${encodeURIComponent(v.id)}?ver=${encodeURIComponent(x.name)}"><b>${esc(x.name)}</b><span class="grow small muted">${ago(x.created_at)}・この版だけの分 ${gb(x.bytes)}</span>›</a>`);
+      const row = h(`<a class="glass row-item" href="/v/${encodeURIComponent(v.id)}?ver=${encodeURIComponent(x.name)}"><b>${esc(x.name)}</b><span class="grow small muted">${ago(x.created_at)}・この版だけの分 ${gb(x.bytes)}${cutOnly(x) ? "・カットだけ" : ""}</span>›</a>`);
       old?.append(role === "owner" ? swipeable(row, { right: { label: "この版を消す", run: async () => {
         await api(`/api/videos/${encodeURIComponent(v.id)}/versions/${encodeURIComponent(x.name)}`, { method: "DELETE" });
         me = await api<Me>("/api/me"); toast(`${x.name} を消しました`); row.remove();
@@ -304,11 +324,13 @@ async function pageSettings() {
       <div class="hstack"><input id="tkLabel" placeholder="鍵の名前（例: 自分の Mac）" style="flex:1"><button class="btn primary" id="tkMake">鍵を作る</button></div>
       <div id="tkOut"></div><div id="tkList" class="list"></div></div>
     ${me!.site?.can_create !== false || me!.usage.channels ? `<h2>容量</h2><div class="glass card stack" id="usage">${usageCard(me!.usage)}</div>` : ""}
+    <h2>この MIRU</h2><div class="glass card stack" id="about">${aboutCard(me!.site)}</div>
     <h2>チャンネルと招待</h2><div id="chs">${skeleton.rows(2)}</div>
     ${me!.site?.can_create !== false && me!.usage.channels < me!.usage.channelLimit ? `<div class="glass card stack" id="new"><b>チャンネルを作る</b>
       <div class="small muted">作った人が管理者になり、招待した人だけが見られます${me!.usage.channelLimit < 100 ? `（1 人 ${me!.usage.channelLimit} つまで）` : ""}。</div>
       <input id="ncName" placeholder="チャンネル名（例: 〇〇の動画）"><input id="ncId" placeholder="英小文字の名前（例: my-channel）" autocapitalize="off" spellcheck="false"><button class="btn primary" id="ncMake">作る</button></div>` : ""}`, "settings");
   $("#out")!.addEventListener("click", async () => { await api("/auth/logout", { method: "POST" }); me = null; go("/login", true); });
+  checkUpdate(me!.site);
   const mcpUrl = `${location.origin}/mcp`;
   const drawTokens = async () => {
     const r = await api<{ tokens: { id: string; label: string; created_at: number; last_used_at: number | null; expires_at: number | null }[] }>("/api/tokens");
@@ -406,13 +428,39 @@ async function pageSettings() {
   if (location.hash === "#new") setTimeout(() => $("#new")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
 }
 
+/** この MIRU: 種類と版。MIRU ライトの持ち主には、自分用に直す方法と、新しい版の知らせを出す */
+const verLabel = (v?: Ver) => (v?.build ? `版 ${v.build}（${v.date}）` : "開発中の版");
+const LIGHT = (s?: Site) => s?.edition === "light";
+function aboutCard(s?: Site) {
+  const own = LIGHT(s) && s?.can_create;
+  return `<div class="hstack"><b style="flex:1">${LIGHT(s) ? "MIRU ライト" : "MIRU"}</b><span class="small muted">${esc(verLabel(s?.version))}</span></div>
+    ${own && s?.update_feed ? `<div id="upd" class="small muted">新しい版があるか確かめています…</div>` : ""}
+    ${own ? `<div class="small muted">自分用に変えたいときは、AI に「MIRU の〇〇を直して」と頼みます。変わるのはあなたの MIRU だけで、新しい版にしても直した所は残ります。</div>` : ""}`;
+}
+/** 新しい版の知らせ（UPDATE_FEED の VERSION.json）と今の版を比べる。読めないときは黙って消す */
+async function checkUpdate(s?: Site) {
+  const box = $("#upd");
+  if (!box || !s?.update_feed) return;
+  try {
+    const f = await fetch(s.update_feed, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)) as Ver | null;
+    if (!f?.build) throw new Error("no feed");
+    if (f.build <= (s.version?.build ?? 0)) { box.textContent = "いまの版が最新です"; return; }
+    const ask = "AI動画編集 lite と MIRU を新しい版にして";
+    box.outerHTML = `<div class="stack" id="upd"><b>新しい版があります（${esc(verLabel(f))}）</b>
+      <div class="small muted">AI に「${ask}」と頼むと、あなたが直した所を残したまま入れ替えます。データと設定はそのままです。</div>
+      <button class="btn sm" id="updCopy">頼む文をコピー</button></div>`;
+    $("#updCopy")!.addEventListener("click", async () => { await navigator.clipboard.writeText(ask); toast("コピーしました。AI に貼って送ってください"); });
+  } catch { box.remove(); }
+}
+
 /** 容量: 使っている量と上限。上限に近いと色を変える */
 function usageCard(u: Usage) {
   const r = Math.min(1, u.bytes / Math.max(1, u.quota));
   const col = r > 0.9 ? "var(--bad)" : r > 0.7 ? "var(--warn)" : "var(--accent, #0a84ff)";
+  const freeCap = LIGHT(me?.site) && me?.site?.can_create && u.quota < 1e15;
   return `<div class="hstack"><b style="flex:1">${gb(u.bytes)} / ${gb(u.quota)}</b><span class="small muted">チャンネル ${u.channels}${u.channelLimit < 100 ? ` / ${u.channelLimit}` : ""}</span></div>
     <div style="height:8px;border-radius:4px;background:rgba(127,127,127,.18);overflow:hidden"><div style="height:100%;width:${(r * 100).toFixed(1)}%;background:${col}"></div></div>
-    <div class="small muted">自分が作ったチャンネルの動画の合計です（版をまたいで同じファイルは 1 回だけ数えます）。招待されたチャンネルの分は、作った人に数えます。いっぱいになったら、動画のパネルで前の版を消してください。</div>`;
+    <div class="small muted">自分が作ったチャンネルの動画の合計です（版をまたいで同じファイルは 1 回だけ数えます）。招待されたチャンネルの分は、作った人に数えます。いっぱいになったら、動画のパネルで前の版を消してください。${freeCap ? "上限は、Cloudflare の無料の範囲（R2 は 10GB）を超えて請求されないように決めた値です。" : ""}</div>`;
 }
 
 /** 顔写真。無い・読めないときは名前の頭文字の丸 */

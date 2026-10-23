@@ -72,6 +72,45 @@ SMALL_CRF = 27
 RETRIES = 5
 
 
+MIRU_PKG = Path(__file__).resolve().parents[3] / 'miru'   # このプラグインに入っている MIRU ライト（立てる元）
+UA = 'miru-sync/1.1'
+
+
+def bundled_version():
+    try:
+        return json.loads((MIRU_PKG / 'VERSION.json').read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def site_version():
+    """自分の MIRU の版（/api/health。ログイン不要）。読めなければ None"""
+    if not SITE.startswith(('https://', 'http://localhost', 'http://127.0.0.1')):
+        return None
+    try:
+        with urllib.request.urlopen(urllib.request.Request(SITE + '/api/health', headers={'user-agent': UA}), timeout=15) as r:
+            return json.loads(r.read())
+    except (OSError, ValueError, urllib.error.URLError):
+        return None
+
+
+def version_note(health=None):
+    """立てた MIRU ライトが、入っている lite の MIRU より古ければ、新しい版にする案内。同じ・読めない・ライトでなければ空"""
+    h, b = health if health is not None else site_version(), bundled_version()
+    have, want = ((h or {}).get('version') or {}).get('build') or 0, b.get('build') or 0
+    if not h or h.get('edition') != 'light' or not want or have >= want:
+        return ''
+    return (f'あなたの MIRU（版 {have or "?"}）は、入っている lite の MIRU（版 {want}・{b.get("date", "")}）より古いです。'
+            f'AI に「MIRU を新しい版にして」と頼むと入れ替わります（node "{MIRU_PKG / "tools" / "setup.mjs"}" update）')
+
+
+def version_cmd(_args):
+    h = site_version()
+    print(json.dumps({'site': SITE or None, 'site_version': (h or {}).get('version'), 'edition': (h or {}).get('edition'),
+                      'reachable': bool(h and h.get('ok')), 'bundled_version': bundled_version() or None,
+                      'setup': str(MIRU_PKG / 'tools' / 'setup.mjs'), 'note': version_note(h) or None}, ensure_ascii=False, indent=1))
+
+
 class MiruError(Exception):
     def __init__(self, msg, code=0):
         super().__init__(msg)
@@ -93,7 +132,7 @@ def call(method, path, body=None, data=None, ctype=None, headers=None):
         raise SystemExit(NO_SITE)
     """One request to the site, retried on 429 / 5xx / dropped connections. Other failures raise MiruError."""
     # Cloudflare の Browser Integrity Check は Python の既定の名乗り（Python-urllib）を 403（1010）で止める
-    h = {'authorization': f'Bearer {token()}', 'user-agent': 'miru-sync/1.1', **(headers or {})}
+    h = {'authorization': f'Bearer {token()}', 'user-agent': UA, **(headers or {})}
     if body is not None:
         data = json.dumps(body, ensure_ascii=False).encode()
         h['content-type'] = 'application/json'
@@ -506,6 +545,9 @@ def publish(args):
         print(f'  同じ名前が他のチャンネルにあるため、サイトでの名前は {made["id"]} になりました（.akari/miru.json に記録）', file=sys.stderr)
         vid = made['id']
     save_state(case, video=vid, channel=args.channel)
+    note = version_note()
+    if note:
+        print(f'  ※ {note}', file=sys.stderr)
     call('POST', f'/api/videos/{vid}/versions', body={'name': args.preview, 'frames': manifest['frames'], 'fps': manifest['fps_num'] / manifest['fps_den'],
                                                        'note': f'{plan_path.name}'})
     base = f'/api/videos/{vid}/versions/{args.preview}'
@@ -651,9 +693,11 @@ def main():
     r.add_argument('--text', required=True)
     r.add_argument('--status', choices=['open', 'doing', 'done'])
     r.add_argument('--video')
+    sub.add_parser('version', help='自分の MIRU と、入っている lite の MIRU の版を比べる')
     args = ap.parse_args()
     try:
-        {'publish': publish, 'pull': pull, 'reply': reply, 'style': style_only, 'designs-push': designs_push, 'designs-pull': designs_pull}[args.cmd](args)
+        {'publish': publish, 'pull': pull, 'reply': reply, 'style': style_only, 'designs-push': designs_push, 'designs-pull': designs_pull,
+         'version': version_cmd}[args.cmd](args)
     except MiruError as e:
         raise SystemExit(f'MIRU: {e}')
 

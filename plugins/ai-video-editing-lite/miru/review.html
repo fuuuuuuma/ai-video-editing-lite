@@ -18,7 +18,7 @@
   --danger:#ff3b30; --ok:#34c759; --warn:#ff9f0a;
   /* timeline colors */
   --c-K:#30b0c7; --c-S:#c7c7cc; --c-emphasis:#ff9f0a; --c-screen:#5856d6; --c-qr:#34c759; --c-cm:#af52de;
-  --c-separator:#bf8cf0; --c-point:#e94343; --c-cut:#ff3b30; --c-comment:#ff2d55; --c-edit:#ffcc00; --done:#aeaeb2;
+  --c-separator:#bf8cf0; --c-name:#0a84ff; --c-title:#1c2c8c; --c-point:#e94343; --c-cut:#ff3b30; --c-comment:#ff2d55; --c-edit:#ffcc00; --done:#aeaeb2;
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
   --header-h:56px; --gap:14px;
   --stage-max-h:max(240px, calc(100vh - var(--header-h) - 470px));
@@ -587,6 +587,8 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
         <span><i style="background:var(--c-emphasis)"></i>強調</span>
         <span><i style="background:var(--c-point)"></i>Point</span>
         <span><i style="background:var(--c-screen)"></i>画面収録</span>
+        <span><i style="background:var(--c-name)"></i>名札</span>
+        <span><i style="background:var(--c-title)"></i>タイトル</span>
         <span><i style="background:var(--c-qr)"></i>QR</span>
         <span><i style="background:var(--c-cm)"></i>CM</span>
         <span><i style="background:var(--c-separator)"></i>区切り</span>
@@ -649,7 +651,7 @@ textarea.field{resize:vertical; min-height:72px; line-height:1.5}
 <!-- the channel's emphasis designs, opened over this page (no new tab) -->
 <div id="stylesSheet" aria-hidden="true"><div class="frame"><iframe title="強調デザイン" loading="lazy"></iframe></div></div>
 
-<!-- MIRU: ai-video-editing-susume/assets/review/index.html を写し、サイトのつなぎを差し込んだもの（tools/sync-review.mjs）。直接直さない -->
+<!-- MIRU ライトの確認画面（元は AI動画編集の確認画面）。自分用に直してよい（README.md の「自分用に直す」） -->
 <script>window.MIRU_CLOUD=1;window.MIRU_READY=new Promise(function(r){window.__miruStart=r});</script>
 <script type="module" src="/src/review/cloud.ts"></script>
 <script>
@@ -769,7 +771,9 @@ function placeVideoLayer(item, s, f){
 // ---------------------------------------------------------------- overlay layers (engine)
 function ensureDom(L){
   let el=domLayers.get(L.i); if(el) return el;
-  if(L.type==='image'){ el=new Image(); el.decoding='async'; el.src=mediaUrl(L.media); if(L.width) el.style.width=L.width+'px'; if(L.height) el.style.height=L.height+'px'; }
+  if(L.type==='image'){ el=new Image(); el.decoding='async'; el.src=mediaUrl(L.media); if(L.width) el.style.width=L.width+'px'; if(L.height) el.style.height=L.height+'px';
+    // a picture that did not arrive (a dropped request) is asked for once more, not left blank for the rest of the play
+    el.onerror=()=>{ if(el.dataset.retried) return; el.dataset.retried='1'; setTimeout(()=>{ el.src=mediaUrl(L.media)+'&r='+Date.now(); },300); }; }
   else { el=document.createElement('div'); el.style.width=L.width+'px'; el.style.height=L.height+'px'; el.style.background=L.color||'#fff'; }
   el.className='li'; el.style.zIndex=10+L.i*2; el.style.display='none'; $('#stage').appendChild(el); domLayers.set(L.i,el); return el;
 }
@@ -817,12 +821,17 @@ function render(force){
     updateNowCap(f); updateTranscript(f); updateRange(f); renderCutCard(); tlDirty=true; }
 }
 let waitHud=0;
+let loopErrAt=0;
 function loop(){
-  if(playUntil!=null && !audio.paused && audio.currentTime*FPS >= playUntil){ playUntil=null; audio.pause(); }
-  if(!audio.paused && audio.readyState<3 && performance.now()-waitHud>1500){ waitHud=performance.now(); hud('音を読み込み中…'); }
-  render(false);
-  if(!audio.paused || tlDirty){ tlDirty=false; const p=precisePos(); drawDetail(p); drawOverview(p); }
+  // the next frame is asked for first: one error in a frame must not stop the picture and the captions for good
+  // (2026-10-23 MIRU: 「通常テロップが途中から映らない・映像も途中で止まる」)
   requestAnimationFrame(loop);
+  try{
+    if(playUntil!=null && !audio.paused && audio.currentTime*FPS >= playUntil){ playUntil=null; audio.pause(); }
+    if(!audio.paused && audio.readyState<3 && performance.now()-waitHud>1500){ waitHud=performance.now(); hud('音を読み込み中…'); }
+    render(false);
+    if(!audio.paused || tlDirty){ tlDirty=false; const p=precisePos(); drawDetail(p); drawOverview(p); }
+  }catch(e){ if(performance.now()-loopErrAt>5000){ loopErrAt=performance.now(); console.error('render',e); } }
 }
 // smooth playhead: extrapolate between coarse currentTime updates
 let rawCT=-1, rawAt=0;
@@ -835,9 +844,8 @@ function captionsAt(f){ return caps.filter(L=>L.start<=f && f<L.end); }
 function currentCap(f){ const cs=captionsAt(f); return cs.filter(c=>c.caption_kind!=='emphasis').slice(-1)[0]||cs.slice(-1)[0]||null; }
 // 話し手の呼び名はプレビューの manifest.speakers から（無ければ 本人・相手）
 function spkName(s){ const mf=(typeof M!=='undefined'&&M)||{};
-  // speakers が無い前のプレビュー（すゝめの案件）は 河村さん と呼ぶ
-  const m=mf.speakers||(/ai-video-editing-susume/.test(mf.case||'')?{K:'河村さん'}:{}); return m[s]||(s==='S'?'相手':'本人'); }
-function capWho(L){ return L.caption_kind==='emphasis'?`強調${L.emphasis_role?'（'+L.emphasis_role+'）':''}`:spkName(L.speaker==='S'?'S':'K'); }
+  const m=mf.speakers||{}; return m[s]||(s==='S'?'相手':'本人'); }
+function capWho(L){ return L.caption_kind==='emphasis'?`強調${L.emphasis_role?'（'+esc(L.emphasis_role)+'）':''}`:esc(spkName(L.speaker==='S'?'S':'K')); }
 let lastCapKey=null;
 function updateNowCap(f){
   const L=currentCap(f); fixingCapCandidate=L;
@@ -899,10 +907,10 @@ function markNotedCaptions(){
 }
 
 // ---------------------------------------------------------------- timelines
-const COL={emphasis:'c-emphasis',point:'c-point',screen:'c-screen',qr:'c-qr',large_qr:'c-qr',cm:'c-cm',separator:'c-separator',end_card:'c-cm',thumbnail:'c-qr'};
+const COL={name:'c-name',title:'c-title',emphasis:'c-emphasis',point:'c-point',screen:'c-screen',qr:'c-qr',large_qr:'c-qr',cm:'c-cm',separator:'c-separator',end_card:'c-cm',thumbnail:'c-qr'};
 const PAL={};
 function loadPalette(){ const cs=getComputedStyle(document.documentElement);
-  for(const n of ['c-K','c-S','c-emphasis','c-point','c-screen','c-qr','c-cm','c-separator','c-cut','c-comment','c-edit','done','accent','text','text2','text3']) PAL[n]=cs.getPropertyValue('--'+n).trim(); }
+  for(const n of ['c-name','c-title','c-K','c-S','c-emphasis','c-point','c-screen','c-qr','c-cm','c-separator','c-cut','c-comment','c-edit','done','accent','text','text2','text3']) PAL[n]=cs.getPropertyValue('--'+n).trim(); }
 function fitCanvas(c){ const r=c.getBoundingClientRect(); const d=window.devicePixelRatio||1; const w=Math.max(1,Math.round(r.width*d)), h=Math.max(1,Math.round(r.height*d));
   if(c.width!==w||c.height!==h){ c.width=w; c.height=h; } const g=c.getContext('2d'); g.setTransform(d,0,0,d,0,0); return {g,W:r.width,H:r.height}; }
 function rr(g,x,y,w,h,r){ if(w<=0) return; r=Math.min(r,w/2,h/2); g.beginPath(); if(g.roundRect) g.roundRect(x,y,w,h,r); else g.rect(x,y,w,h); g.fill(); }
@@ -953,8 +961,10 @@ function drawDetail(pos){
       g.globalAlpha=.85; g.fillText(st<1?tc(Math.round(t*FPS)).slice(3):shortTc(t*FPS),xx,6); } }
   g.globalAlpha=1; g.textAlign='left'; g.font='600 11px -apple-system,"Hiragino Sans",sans-serif';
   // marks
-  { const [y0,y1]=LANES.marks; for(const m of M.marks){ const [ms,me]=markSpan(m); if(me<a||ms>b) continue; const x0=x(ms), x1=x(me);
-    g.fillStyle=PAL[COL[m.kind]]||PAL.text3; rr(g,x0,y0+2,x1-x0,y1-y0-4,6);
+  { const [y0,y1]=LANES.marks; for(const m of [...M.marks].sort((p,q)=>(q.kind==='title')-(p.kind==='title'))){ const [ms,me]=markSpan(m); if(me<a||ms>b) continue; const x0=x(ms), x1=x(me);
+    g.fillStyle=PAL[COL[m.kind]]||PAL.text3;
+    if(m.kind==='title'){ rr(g,x0,y1-8,x1-x0,6,3); if(sel && markIs(m,sel)){ g.save(); g.strokeStyle=PAL.accent; g.lineWidth=2; g.strokeRect(x0,y1-9,x1-x0,8); g.restore(); } continue; }
+    rr(g,x0,y0+2,x1-x0,y1-y0-4,6);
     clipText(g,(m.label||m.kind).replace(/\n/g,' '),x0,x1-3,(y0+y1)/2,(m.kind==='emphasis'||m.kind==='separator')?'#3a2500':'#fff');
     if(sel && markIs(m,sel)){ g.save(); g.strokeStyle=PAL.accent; g.lineWidth=2.5; g.beginPath(); if(g.roundRect) g.roundRect(x0-1,y0+1,x1-x0+2,y1-y0-2,7); else g.rect(x0-1,y0+1,x1-x0+2,y1-y0-2); g.stroke(); g.restore(); } } }
   // captions
@@ -1022,7 +1032,7 @@ function setupCanvasInput(){
   ov.addEventListener('pointerup',()=>drag=false); ov.addEventListener('pointercancel',()=>drag=false);
   const dt=$('#detail'); let st=null;
   const frameAt=(e,base)=>{ const r=dt.getBoundingClientRect(); return base+((e.clientX-r.left)/r.width-.5)*spanS*2*FPS; };
-  dt.addEventListener('pointerdown',e=>{ dt.setPointerCapture(e.pointerId);
+  dt.addEventListener('pointerdown',e=>{ dt.setPointerCapture(e.pointerId); wheelHush=true;
     // ⇧+click on a caption: add it to the picked ones, or take it out again
     if(e.shiftKey){ const L=capAt(e); if(L){ toggleCapSel(L); st=null; return; } }
     const me=markEdgeAt(e); if(me){ audio.pause(); sel=me.t; renderSelBar(); markDrag={...me, f:me.f0, pos:precisePos()}; tlDirty=true; return; }
@@ -1054,7 +1064,12 @@ function setupCanvasInput(){
   // double-click a caption on the timeline: 字幕一覧 opens that caption to retype it
   dt.addEventListener('dblclick',e=>{ const L=capAt(e); if(!L) return; e.preventDefault(); editInList(L); });
   // pinch / ⌘+wheel: the width follows the gesture smoothly (a mouse wheel notch is capped to one gentle step)
+  // a two-finger swipe goes on by itself after the fingers leave (momentum); once the timeline is touched, the rest of
+  // that stream is ignored until the wheel has been still for 0.25 s (2026-10-23: it kept moving under one finger)
+  let wheelHush=false, wheelAt=0;
   dt.addEventListener('wheel',e=>{
+    const now=performance.now(), gap=now-wheelAt; wheelAt=now;
+    if(wheelHush || st || capDrag || markDrag || capBox){ if(wheelHush && gap>250 && !(st||capDrag||markDrag||capBox)) wheelHush=false; else { e.preventDefault(); return; } }
     if(!(e.ctrlKey||e.metaKey)){
       // two fingers sideways: the timeline moves left / right, at the same rate as the pinch zoom
       if(Math.abs(e.deltaX)<=Math.abs(e.deltaY)) return; e.preventDefault();
@@ -1072,15 +1087,17 @@ function markTargetOf(m){
   if(m.kind==='qr'){ const L=olayers.find(L=>/^qr-/.test(L.id||'') && L.start===m.start); return L?{kind:'large_qr', id:L.id, label:'大型QR'}:null; }
   if(m.kind==='thumbnail'){ const L=olayers.find(L=>L.type==='image' && /^thumb-/.test(L.id||'') && L.start===m.start); return L?{kind:'thumbnail', id:L.id, label:'過去動画のサムネイル'}:null; }
   if(m.kind==='screen'){ const L=olayers.find(L=>L.id==='frame-'+m.label && L.start===m.start); return L?{kind:'screen', id:L.id, label:'画面収録 '+m.label}:null; }
+  if(m.kind==='name'){ const L=olayers.find(L=>/^namecard-/.test(L.id||'') && L.start===m.start); return L?{kind:'name', id:L.id, label:'名札'}:null; }
+  if(m.kind==='title'){ const L=olayers.find(L=>L.role==='header' && /^hdr-l/.test(L.id||'') && L.start===m.start); return L?{kind:'title', id:L.id, label:'タイトル'}:null; }
   return null; }
-const SEL_NAME=t=>t.kind==='emphasis'?`強調「${t.label}」`:t.kind==='thumbnail'?'過去動画のサムネイル':t.kind==='screen'?t.label:'大型QR';
+const SEL_NAME=t=>t.kind==='name'?'名札':t.kind==='title'?'タイトル':t.kind==='emphasis'?`強調「${t.label}」`:t.kind==='thumbnail'?'過去動画のサムネイル':t.kind==='screen'?t.label:'大型QR';
 function markIs(m,t){ const x=markTargetOf(m); return !!x && x.id===t.id; }
 function targetLayer(t){ return M.layers.find(L=>L.id===t.id)||null; }
 function targetSpan(t){ const L=targetLayer(t); return L?[L._s??L.start, L._e??L.end]:[0,0]; }
 function markSpan(m){ if(markDrag && markIs(m,markDrag.t)){ return markDrag.side==='start'?[markDrag.f,m.end]:[m.start,markDrag.f]; } return [m.start,m.end]; }
 function inMarksLane(e){ const r=$('#detail').getBoundingClientRect(); const y=e.clientY-r.top; return y>=LANES.marks[0]-2 && y<=LANES.marks[1]+2; }
 function laneX(e){ const r=$('#detail').getBoundingClientRect(); const pos=precisePos(), a=pos-spanS*FPS, b=pos+spanS*FPS; return {mx:e.clientX-r.left, px:f=>(f-a)/(b-a)*r.width, a, b}; }
-function markAt(e){ const {mx,px}=laneX(e); for(const m of M.marks){ if(px(m.start)<=mx && mx<=px(m.end)){ const t=markTargetOf(m); if(t) return t; } } return null; }
+function markAt(e){ const {mx,px}=laneX(e); for(const m of [...M.marks].sort((p,q)=>(p.kind==='title')-(q.kind==='title'))){ if(px(m.start)<=mx && mx<=px(m.end)){ const t=markTargetOf(m); if(t) return t; } } return null; }
 // captions on the timeline: the one under the pointer, picking with ⇧click or a box
 function inCapsLane(e){ const r=$('#detail').getBoundingClientRect(); const y=e.clientY-r.top; return y>=LANES.caps[0]-2 && y<=LANES.caps[1]+2; }
 function capAt(e){ if(!inCapsLane(e)) return null; const r=$('#detail').getBoundingClientRect(); const {mx,a,b}=laneX(e); const fr=a+mx/r.width*(b-a);
@@ -1092,7 +1109,7 @@ function boxSelect(){ const d=capBox; const lo=Math.min(d.f0,d.f1), hi=Math.max(
   if(ya<=LANES.caps[1] && yb>=LANES.caps[0]) for(const L of caps){ if(L.caption_kind==='emphasis'||L.deleted) continue; if(L.start<hi && lo<L.end) s.add(L.key); }
   selCaps=s; }
 function markEdgeAt(e){ if(!inMarksLane(e)) return null; const {mx,px,a,b}=laneX(e); let best=null;
-  for(const m of M.marks){ if(m.end<a||m.start>b) continue; const t=markTargetOf(m); if(!t) continue;
+  for(const m of [...M.marks].sort((p,q)=>(p.kind==='title')-(q.kind==='title'))){ if(m.end<a||m.start>b) continue; const t=markTargetOf(m); if(!t) continue;
     for(const [side,f] of [['start',m.start],['end',m.end]]){ const d=Math.abs(px(f)-mx); if(d<=6 && (!best||d<best.d)) best={d,side,f0:f,t,m}; } }
   return best; }
 function snapMark(f,d){ const [s0,e0]=[d.m.start,d.m.end];
@@ -1109,6 +1126,7 @@ function retime(t, a, b){
 }
 function renderSelBar(){ const bar=$('#selBar'); if(!bar) return;
   if(sel && !targetLayer(sel)) sel=null;
+  bar.hidden=true; bar.innerHTML=''; return;      // 選択中の帯は出さない（利用者 2026-10-23）。⇧I / ⇧O は効く
   if(!sel){ bar.hidden=true; bar.innerHTML=''; return; }
   const [a,b]=targetSpan(sel);
   bar.hidden=false;
@@ -1453,9 +1471,14 @@ function moveBoundary(left, right, f){
   const now=new Date().toISOString();
   for(const e of left){ if(f-e.start<MIN_CAP){ toast('字幕が短くなりすぎます（12コマ未満）'); return; } }
   for(const e of right){ if(e.end-f<MIN_CAP){ toast('字幕が短くなりすぎます（12コマ未満）'); return; } }
+  const b0=right.length?right[0].start:left.length?left[0].end:null;
   for(const e of left) setCapRange(e, e.start, f, now);
   for(const e of right) setCapRange(e, f, e.end, now);
   saveEdits(); rebuildCaps(); toast(`字幕の切り替えを ${tc(f)} にしました`);
+  // the name card stands next to the caption: when that edge moves, the name card ends / starts there too
+  if(b0!=null) for(const m of M.marks){ if(m.kind!=='name') continue; const t=markTargetOf(m); if(!t) continue;
+    if(m.end===b0 && !left.length && f-m.start>=MIN_CAP) retime(t, m.start, f);
+    else if(m.start===b0 && !right.length && m.end-f>=MIN_CAP) retime(t, f, m.end); }
 }
 function capFromHere(){
   const f=frameNow(); const e=currentCap(f); if(!e){ toast('いまの位置に字幕はありません'); return; }
@@ -1732,8 +1755,8 @@ function carriedHtml(){
   const n=k=>its.filter(x=>x.check&&x.check.state===k).length;
   const by={}; for(const x of its) (by[x.from]=by[x.from]||[]).push(x);
   const tag=c=>!c?'':c.state==='ok'?'<span class="tag2 ok">反映済み</span>':c.state==='later'?'<span class="tag2">後の手直しで上書き</span>':`<span class="tag2 ng">要確認</span>`;
-  const rows=x=>`<div class="crow2"><button class="it-tc${x.frame==null?' na':''}" data-a="cseek" data-f="${x.frame??''}">${x.frame==null?'-':tc(x.frame)}</button>
-    <span class="tag2 fix">${CARRY_KIND[x.op]||x.op}</span><span class="t" title="${esc((x.check&&x.check.note)||'')}">${esc(String(x.label||'').replace(/\n/g,'／'))}</span>${tag(x.check)}</div>`;
+  const rows=x=>`<div class="crow2"><button class="it-tc${x.frame==null?' na':''}" data-a="cseek" data-f="${esc(x.frame??'')}">${x.frame==null?'-':tc(x.frame)}</button>
+    <span class="tag2 fix">${CARRY_KIND[x.op]||esc(x.op)}</span><span class="t" title="${esc((x.check&&x.check.note)||'')}">${esc(String(x.label||'').replace(/\n/g,'／'))}</span>${tag(x.check)}</div>`;
   return `<details class="carried"${n('ng')?' open':''}><summary>前の版から引き継いだ手直し ${its.length}件
     <span class="tag2 ok">反映済み ${n('ok')}</span>${n('later')?`<span class="tag2">後の手直しで上書き ${n('later')}</span>`:''}${n('ng')?`<span class="tag2 ng">要確認 ${n('ng')}</span>`:''}</summary>
     ${Object.keys(by).map(k=>`<div class="ctx">${esc(k)} で直した分（${by[k].length}件）</div>`+by[k].map(rows).join('')).join('')}</details>`;
@@ -1747,14 +1770,14 @@ function renderEdits(){
     const state=!r?'<span class="tag2 gone">この版に該当なし</span>':(r.applied?'<span class="tag2">この版に反映済み</span>':'');
     const other=it.preview!==M.name?`<span class="tag2">${esc(it.preview||'')} で直した</span>`:'';
     const br=t=>esc(t||'').replace(/\n/g,'<span class="br">／</span>');
-    const who=s=>spkName(s==='S'?'S':'K');
+    const who=s=>esc(spkName(s==='S'?'S':'K'));
     let body='';
     if(it.op==='edit') body=`<div class="fix"><s>${br(it.old_text)}</s> → <b>${br(it.text)}</b></div>`+(it.speaker && it.speaker!==(it.old_speaker||it.speaker)?`<div class="ctx">話者：${who(it.old_speaker)} → ${who(it.speaker)}</div>`:'');
     else if(it.op==='delete') body=`<div class="fix"><s>${br(it.old_text)}</s>（出さない）</div>`;
     else if(it.op==='time') body=`<div class="fix">${br(it.old_text)}</div><div class="ctx">${r&&r.L?tc(r.L._s)+' 〜 '+tc(r.L._e)+' → ':''}${r?tc(r.a)+' 〜 '+tc(r.b):''}</div>`;
     else body=`<div class="fix"><b>${br(it.text)}</b></div><div class="ctx">${who(it.speaker)}・${fr!=null&&r?tc(r.a)+' 〜 '+tc(r.b):''}</div>`;
     return `<div class="item${r&&!r.applied?'':' applied'}" data-id="${esc(it.id)}"><div class="head"><button class="it-tc${fr==null?' na':''}" data-a="seek">${fr==null?'-':tc(fr)}</button>
-      <span class="tag2 fix">${EDIT_LABEL[it.op]||it.op}</span>${other}${state}</div>${body}
+      <span class="tag2 fix">${EDIT_LABEL[it.op]||esc(it.op)}</span>${other}${state}</div>${body}
       <div class="tools"><button class="btn sm" data-a="retype"${fr==null||(r&&r.applied)?' disabled':''}>打ち直す</button><span class="grow"></span><button class="btn sm danger" data-a="undo">取り消す</button></div></div>`; }).join('')
     || '<div class="empty">この版での手直しはまだありません<br>字幕一覧の行をダブルクリック（E）で打ち直し、時間軸の上の「カット点」でカットを戻す・足すことができます</div>');
   const c=$('#editCount'); if(c.textContent!==String(live)){ c.textContent=live; c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); }
@@ -1878,8 +1901,11 @@ function setTab(t, animate){
 function toggleHelp(force){ const h=$('#help'); const open=force??!h.classList.contains('open'); h.classList.toggle('open',open); }
 function hideSkeleton(){ ready=true; document.body.classList.add('ready'); const sk=$('#skeleton'); sk.classList.add('out'); setTimeout(()=>sk.remove(),800); }
 function waitReady(){ return new Promise(res=>{ const t0=performance.now();
-  const chk=()=>{ const s=assigned.get(clips[Math.max(0,bsearch(clips,frameNow()))].uid);
-    if((audio.readyState>=3 && s && s.el.readyState>=2) || performance.now()-t0>15000) res(); else setTimeout(chk,80); }; chk(); }); }
+  // with the light flat video on, the picture is the flat video (no camera slot is assigned): waiting for a camera slot
+  // here held every opening for the 15 s timeout (2026-10-23)
+  const chk=()=>{ const c=clips[Math.max(0,bsearch(clips,frameNow()))]; const s=assigned.get(c.uid);
+    const v=(flatOn && flatEl && c.flatT!=null) ? flatEl : (s && s.el);
+    if((audio.readyState>=3 && v && v.readyState>=2) || performance.now()-t0>15000) res(); else setTimeout(chk,80); }; chk(); }); }
 
 function loadTimeline(){
   clips.length=0; vlayers.length=0; olayers.length=0; captionLayers.length=0; layerByCap.clear(); cutFrames=[];

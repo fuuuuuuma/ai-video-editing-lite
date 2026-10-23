@@ -1,0 +1,23 @@
+name: 編集（カット・字幕・強調）で困った
+description: 学ばせる・編集する・書き出すときにうまくいかない
+labels: ["editing"]
+body:
+  - type: markdown
+    attributes:
+      value: 先に AI に「doctor を動かして」と頼んでみてください。動画や音声そのものは貼らないでください（必要なら、こちらから聞きます）。
+  - type: textarea
+    id: what
+    attributes:
+      label: 何をしたら、何が出ましたか
+    validations: { required: true }
+  - type: textarea
+    id: doctor
+    attributes:
+      label: doctor.py の結果
+      render: text
+  - type: input
+    id: env
+    attributes:
+      label: パソコンと AI
+      placeholder: 例 Mac（Apple シリコン）・Claude Code
+    validations: { required: true }

@@ -11,7 +11,7 @@
 
 import { exec, one, type D1Database, type User } from "./db";
 
-export type AuthEnv = { GOOGLE_CLIENT_ID?: string; GOOGLE_CLIENT_SECRET?: string; DB?: D1Database; DEV_LOGIN?: string };
+export type AuthEnv = { GOOGLE_CLIENT_ID?: string; GOOGLE_CLIENT_SECRET?: string; DB?: D1Database; DEV_LOGIN?: string; SITE_OWNERS?: string };
 
 const SESSION_COOKIE = "__Host-miru_s";
 const FLOW_COOKIE = "__Host-miru_oauth";
@@ -56,6 +56,19 @@ export function emailKey(email: string): string {
   if (domain !== "gmail.com" && domain !== "googlemail.com") return e;
   return e.slice(0, at).split("+")[0].replace(/\./g, "") + "@gmail.com";
 }
+/** サイトの持ち主（SITE_OWNERS。メールをカンマで）。空なら誰も持ち主ではなく、招待制にもならない */
+export const siteOwners = (env: { SITE_OWNERS?: string }) => new Set(String(env.SITE_OWNERS ?? "").split(",").map((e) => emailKey(e)).filter((e) => e.includes("@")));
+export const isSiteOwner = (env: { SITE_OWNERS?: string }, email: string) => siteOwners(env).has(emailKey(email));
+
+/** このサイトに入れるか。SITE_OWNERS があるときは完全招待制（2026-10-22）: 持ち主と、どこかのチャンネルに招待されたメールだけ。
+ *  招待されていない人は Google でログインしても入れず、印も作らない。招待を全部外された人も入れなくなる */
+export async function mayEnter(env: { SITE_OWNERS?: string }, db: D1Database, email: string): Promise<boolean> {
+  const own = siteOwners(env);
+  if (!own.size || own.has(emailKey(email))) return true;
+  await claimInvites(db, email);
+  return !!(await one(db, "SELECT 1 AS x FROM members WHERE email = ?1 LIMIT 1", email.trim().toLowerCase()));
+}
+
 const isGmail = (email: string) => /@(gmail|googlemail)\.com$/i.test(email.trim());
 
 /** 招待の書き方（点の有無・+・googlemail.com）が Google の返したメールと違っても、同じ受け箱なら本人の招待にする。
@@ -117,6 +130,7 @@ export async function handleAuth(req: Request, env: AuthEnv, fetcher: typeof fet
   if (p === "/auth/dev" && db && env.DEV_LOGIN === "1" && ["localhost", "127.0.0.1"].includes(url.hostname)) {
     const email = (url.searchParams.get("email") ?? "").toLowerCase();
     if (!/^[^\s@]+@[^\s@]+$/.test(email)) return json({ error: "email が要ります" }, 400);
+    if (!(await mayEnter(env, db, email))) return redirect("/login?denied=1");
     await exec(db, "INSERT INTO users (id, email, name, picture, created_at) VALUES (?1, ?2, ?3, '', ?4) ON CONFLICT(id) DO NOTHING", "dev-" + email, email, email.split("@")[0], Date.now());
     await claimInvites(db, email);
     const token = random();
@@ -165,6 +179,8 @@ export async function handleAuth(req: Request, env: AuthEnv, fetcher: typeof fet
     if (!okIss || claims.aud !== env.GOOGLE_CLIENT_ID || typeof claims.sub !== "string" || Number(claims.exp) * 1000 < Date.now() || claims.email_verified !== true) {
       return redirect("/login?failed=1", { "set-cookie": clear });
     }
+    // 完全招待制: 招待されていないメールは、ここで断る（users にも sessions にも残さない）
+    if (!(await mayEnter(env, db, String(claims.email ?? "")))) return redirect("/login?denied=1", { "set-cookie": clear });
     const user: User = { id: claims.sub, email: String(claims.email ?? "").toLowerCase(), name: String(claims.name ?? claims.email ?? ""), picture: String(claims.picture ?? "") };
     await exec(db,
       "INSERT INTO users (id, email, name, picture, created_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(id) DO UPDATE SET email = ?2, name = ?3, picture = ?4",

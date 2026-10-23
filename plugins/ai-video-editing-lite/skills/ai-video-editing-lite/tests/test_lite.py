@@ -107,18 +107,31 @@ class Miru(unittest.TestCase):
         # 0.2.0: 共用のサイトへは上げない。自分の MIRU（~/.config/miru/url か MIRU_URL）が無ければ立て方を案内して止まる
         home = tempfile.mkdtemp(prefix='aive-lite-home-')
         env = {k: v for k, v in os.environ.items() if k not in ('MIRU_URL', 'MIRU_TOKEN')}
-        env.update(HOME=home, MIRU_TOKEN='miru_test')
+        env.update(HOME=home, USERPROFILE=home, MIRU_TOKEN='miru_test')
         r = subprocess.run([sys.executable, '-I', '-c', 'import sys; sys.path.insert(0, sys.argv[1]); import miru_sync; miru_sync.call("GET", "/api/me")', str(SCRIPTS)],
                            env=env, capture_output=True, text=True)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('miru-setup', r.stderr)
-        self.assertNotIn('pinpon', (SCRIPTS / 'miru_sync.py').read_text() + (SCRIPTS / 'doctor.py').read_text())
+        self.assertNotIn('pin' + 'pon', (SCRIPTS / 'miru_sync.py').read_text() + (SCRIPTS / 'doctor.py').read_text())   # 持ち主のサイトを既定にしない
         Path(home, '.config/miru').mkdir(parents=True)
         Path(home, '.config/miru/url').write_text('https://miru.example.workers.dev/\n')
         r = subprocess.run([sys.executable, '-I', '-c', 'import sys; sys.path.insert(0, sys.argv[1]); import miru_sync; print(miru_sync.SITE)', str(SCRIPTS)],
                            env=env, capture_output=True, text=True)
         self.assertEqual(r.stdout.strip(), 'https://miru.example.workers.dev')
 
+
+
+class MiruVersion(unittest.TestCase):
+    def test_bundled_miru_and_version_note(self):
+        # 0.2.1: lite に入っている MIRU ライトの版（tools/release-light.mjs が書く）と、立てた MIRU が古いときの案内
+        import miru_sync
+        b = miru_sync.bundled_version()
+        self.assertGreater(b.get('build', 0), 0)
+        self.assertTrue((miru_sync.MIRU_PKG / 'tools' / 'setup.mjs').exists())
+        light = lambda n: {'ok': True, 'edition': 'light', 'version': {'build': n}}
+        self.assertEqual(miru_sync.version_note(light(b['build'])), '')
+        self.assertIn('setup.mjs', miru_sync.version_note(light(b['build'] - 1)))
+        self.assertEqual(miru_sync.version_note({'ok': True, 'edition': 'personal', 'version': {'build': 0}}), '')   # 個人用の MIRU には言わない
 
 if __name__ == '__main__':
     unittest.main()

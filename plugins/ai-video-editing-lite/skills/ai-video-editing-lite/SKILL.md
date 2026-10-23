@@ -21,6 +21,8 @@ description: 自分の YouTube チャンネルの編集の作風（字幕・強�
 - スクリプト: このファイルと同じ場所の `scripts/`（以下 `scripts/…`）。**Python は `setup.py` が表示した `python`**（`~/.ai-video-editing-lite/venv/bin/python`、Windows は `venv\Scripts\python.exe`）で呼ぶ。以下 `PY` と書く。
 - 記憶: `~/.ai-video-editing-lite/`（チャンネル・強調デザイン・学んだ資料・書体・Python 環境）。
 - 案件: 既定は `~/Movies/ai-video-editing-lite/<日付>-<名前>/`（`case.py new --out` で変えられる）。
+- MIRU ライト（確認サイト）: プラグインの `miru/`（立てる元）。立てたものは `~/MIRU`。立てる・確かめる・新しい版にする・自分用に直すは `miru-setup` スキル。
+- このスキル自体を利用者が直したいと言ったら: 作風と続けるルールは記憶で直す（下の「学びを残す」）。しくみを変えるなら GitHub でフォークしてフォークから入れる方法を案内する（プラグインの中を直接直すと、更新で消える）。
 
 ## 最初に（毎回）
 
