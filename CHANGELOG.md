@@ -1,5 +1,9 @@
 # 更新の記録
 
+## 0.2.1（2026-10-23）
+
+- Windows で、日本語の入った設定や文字起こしを読むところで止まらないようにしました（setup.py が作る Python の環境を UTF-8 で動かす）。0.2.0 を Windows で入れた人は、`setup.py` をもう一度実行してください。doctor が「UTF-8 で動く（Windows）」を確かめます。
+
 ## 0.2.0（2026-10-23）
 
 - **MIRU ライト**: 確認サイト MIRU を、自分の Cloudflare に自分専用で立てる形にしました（`/ai-video-editing-lite:miru-setup`・`$miru-setup`）。共用の MIRU には上げません。

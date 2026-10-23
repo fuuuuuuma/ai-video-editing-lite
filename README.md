@@ -76,7 +76,7 @@ MIRU ライトは、できた動画を見て修正指示を書き込むサイト
 - Claude Code または Codex（プラグインが使える版）
 - Python 3.10 以上（Mac は `brew install python@3.12`、Windows は python.org から）
 - ffmpeg（Mac は `brew install ffmpeg`、Windows は `winget install Gyan.FFmpeg`）
-- 空き容量 20GB ほど。Apple Silicon の Mac で作り、確かめています。Windows・Intel Mac は文字起こしに faster-whisper を使います（動作は未確認）。
+- 空き容量 20GB ほど。Apple Silicon の Mac で作り、確かめています。Windows・Intel Mac は文字起こしに faster-whisper を使います。Windows は、単体の試験と MIRU ライトを立てる道具を GitHub の検査（Mac・Windows・Linux）で確かめていますが、撮影素材からの編集の通しはまだ確かめていません。
 
 2 行はプラグインの導入コマンドです。Python・ffmpeg・Claude Code / Codex 自体のインストールは含みません。
 

@@ -32,6 +32,8 @@ try:
     item(True, '文字起こし', asr.backend())
 except SystemExit as e:
     item(False, '文字起こし', str(e), 'setup.py を実行する')
+if os.name == 'nt':
+    item(bool(sys.flags.utf8_mode), 'UTF-8 で動く（Windows）', 'はい' if sys.flags.utf8_mode else 'いいえ', 'setup.py をもう一度実行する（venv に UTF-8 で動かす設定を置く）')
 for t in ('ffmpeg', 'ffprobe'):
     item(bool(shutil.which(t)), t, shutil.which(t) or '見つかりません', 'Mac: brew install ffmpeg / Windows: winget install Gyan.FFmpeg')
 missing = [k for k, (rel, sha, _) in lite.FONT_SET.items() if not (lite.FONTS / Path(rel).name).exists()]

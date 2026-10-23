@@ -45,5 +45,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install numpy pillow opencv-python-headless uharfbuzz fonttools
-      - run: python -m unittest discover -s tests
+      # setup.py と同じ形: venv を作り、Windows では UTF-8 で動かす設定（aive_utf8.pth）を置いてから、その python で試す
+      - name: venv
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/v"
+          if [ -x "$RUNNER_TEMP/v/Scripts/python.exe" ]; then PY="$RUNNER_TEMP/v/Scripts/python.exe"; else PY="$RUNNER_TEMP/v/bin/python"; fi
+          echo "PY=$PY" >> "$GITHUB_ENV"
+          "$PY" -c "import site, pathlib, sys; sys.path.insert(0, 'scripts'); import setup; setup.put_utf8(pathlib.Path(site.getsitepackages()[-1]))"
+          "$PY" -m pip install -q numpy pillow opencv-python-headless uharfbuzz fonttools
+      - name: unittest
+        shell: bash
+        run: '"$PY" -m unittest discover -s tests'
