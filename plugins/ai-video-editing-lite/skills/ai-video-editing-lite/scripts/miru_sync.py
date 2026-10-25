@@ -5,6 +5,7 @@
                   --channel: the channel on MIRU (default: the case's channel name; made on MIRU if it is not there yet)
   miru_sync.py pull <case> --preview v10            # notes -> planning/review-comments.json, fixes -> planning/*-edits.json
   miru_sync.py reply <case> --note <id> --text ... [--status done]
+  miru_sync.py deliver <case> --preview v3 --file exports/name_v3.mp4   # the finished MP4 of an approved version
   miru_sync.py style <case> --preview v10            # only caption-style.json and its fonts, to a version already up
   miru_sync.py designs-push [--channel my-ch] [--slug my-ch] [--case <case> [--plan planning/render-plan-vN.json]]
                   the channel's emphasis designs (~/.ai-video-editing-lite/channels/<slug>/designs.json) and their
@@ -673,6 +674,30 @@ def pull(args):
                       'cut_edits': len(out['planning/cut-edits.json']['items']), 'approved': approved, 'stale_approvals': stale}, ensure_ascii=False))
 
 
+# 完成版を 1 回で送る大きさの上限（これより大きいものは分けて送り、切れても続きから送る）
+ONE_SHOT = 90 * 1024 * 1024
+
+
+def deliver(args):
+    """The finished MP4 of a version someone approved on the site (2026-10-25). The other side downloads it from the
+    video's panel. The site takes it only for an approved version and counts it in the space (9 GB on MIRU light;
+    the owner can delete it there after the download). Big files go in parts and resume after a break."""
+    case = args.case.resolve()
+    vid = video_id(case, args.video)
+    src = Path(args.file).resolve()
+    if not src.is_file() or src.suffix.lower() != '.mp4':
+        raise SystemExit(f'MP4 が見つかりません: {src}')
+    base = f'/api/videos/{vid}/versions/{urllib.parse.quote(args.preview)}'
+    size = src.stat().st_size
+    if size <= ONE_SHOT:
+        call('PUT', f'{base}/files/final.mp4', data=src.read_bytes(), ctype='video/mp4')
+    else:
+        qs = urllib.parse.urlencode({'path': 'final.mp4', 'type': 'video/mp4', 'size': size})
+        resume = case / '.akari/cache/miru-upload' / f'final-{hashlib.sha256((SITE + vid).encode()).hexdigest()[:12]}-{args.preview}.json'
+        multipart(f'{base}/mpu', qs, src, resume)
+    print(json.dumps({'video': vid, 'preview': args.preview, 'bytes': size, 'link': f'{SITE}/v/{vid}?ver={args.preview}'}, ensure_ascii=False))
+
+
 def reply(args):
     vid = video_id(args.case.resolve(), args.video)
     body = {'reply': args.text}
@@ -714,11 +739,16 @@ def main():
     r.add_argument('--text', required=True)
     r.add_argument('--status', choices=['open', 'doing', 'done'])
     r.add_argument('--video')
+    d = sub.add_parser('deliver', help='承認された版に完成版の MP4 を置く（相手は MIRU の動画のパネルからダウンロードできる）')
+    d.add_argument('case', type=Path)
+    d.add_argument('--preview', required=True)
+    d.add_argument('--file', required=True)
+    d.add_argument('--video')
     sub.add_parser('version', help='自分の MIRU と、入っている lite の MIRU の版を比べる')
     args = ap.parse_args()
     try:
         {'publish': publish, 'pull': pull, 'reply': reply, 'style': style_only, 'designs-push': designs_push, 'designs-pull': designs_pull,
-         'version': version_cmd}[args.cmd](args)
+         'version': version_cmd, 'deliver': deliver}[args.cmd](args)
     except MiruError as e:
         raise SystemExit(f'MIRU: {e}')
 

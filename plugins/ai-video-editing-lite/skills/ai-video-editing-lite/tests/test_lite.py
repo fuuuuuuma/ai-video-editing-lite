@@ -137,6 +137,33 @@ class MiruApproved(unittest.TestCase):
         self.assertEqual(miru_sync.approval_of([{'name': 'v1', 'ready': 1}], []), (None, []))
 
 
+class MiruDeliver(unittest.TestCase):
+    def test_small_in_one_and_big_in_parts(self):
+        import argparse, miru_sync
+        case = Path(tempfile.mkdtemp(prefix='aive-deliver-')) / 'case-a'
+        case.mkdir()
+        mp4 = case / 'final.mp4'
+        mp4.write_bytes(b'x' * 2000)
+        calls, parts = [], []
+        old = (miru_sync.call, miru_sync.multipart, miru_sync.ONE_SHOT, miru_sync.SITE)
+        miru_sync.call = lambda method, path, **kw: calls.append((method, path, kw.get('ctype'), len(kw.get('data') or b'')))
+        miru_sync.multipart = lambda prefix, qs, src, resume: parts.append((prefix, qs, resume.name))
+        miru_sync.SITE = 'https://miru.example'
+        try:
+            a = argparse.Namespace(case=case, video='ep1', preview='v3', file=str(mp4))
+            miru_sync.deliver(a)
+            self.assertEqual(calls, [('PUT', '/api/videos/ep1/versions/v3/files/final.mp4', 'video/mp4', 2000)])
+            miru_sync.ONE_SHOT = 1000          # 大きいファイルの道
+            miru_sync.deliver(a)
+            self.assertEqual(parts[0][0], '/api/videos/ep1/versions/v3/mpu')
+            self.assertIn('path=final.mp4', parts[0][1])
+            self.assertTrue(parts[0][2].startswith('final-') and parts[0][2].endswith('-v3.json'))
+            with self.assertRaises(SystemExit):
+                miru_sync.deliver(argparse.Namespace(case=case, video='ep1', preview='v3', file=str(case / 'nai.mp4')))
+        finally:
+            miru_sync.call, miru_sync.multipart, miru_sync.ONE_SHOT, miru_sync.SITE = old
+
+
 class MiruVersion(unittest.TestCase):
     def test_bundled_miru_and_version_note(self):
         # 0.2.1: lite に入っている MIRU ライトの版（tools/release-light.mjs が書く）と、立てた MIRU が古いときの案内
