@@ -357,15 +357,17 @@ async function pageSettings() {
     }
     // Claude Code: どのフォルダーから開いても使えるように -s user（無いと、そのとき開いていたフォルダーだけになる）
     const cmd = `claude mcp add -s user --transport http miru ${mcpUrl} --header "Authorization: Bearer ${r.token}"`;
-    // Codex は設定ファイル（~/.codex/config.toml）に鍵のヘッダーを書く。前の [mcp_servers.miru] は消してから足す（鍵を作り直したときに重ならないように）
-    const codexMac = `mkdir -p ~/.codex && touch ~/.codex/config.toml && perl -0pi -e 's/\\n*\\[mcp_servers\\.miru\\][^\\[]*//g' ~/.codex/config.toml && printf '\\n[mcp_servers.miru]\\nurl = "${mcpUrl}"\\nhttp_headers = { Authorization = "Bearer ${r.token}" }\\n' >> ~/.codex/config.toml`;
-    const codexWin = `$p = "$HOME\\.codex\\config.toml"; New-Item -Force -ItemType Directory "$HOME\\.codex" | Out-Null; if (Test-Path $p) { ((Get-Content $p -Raw) -replace '(?s)(\\r?\\n)*\\[mcp_servers\\.miru\\][^\\[]*', '') | Set-Content -Path $p -NoNewline }; Add-Content $p "\`n[mcp_servers.miru]\`nurl = \`"${mcpUrl}\`"\`nhttp_headers = { Authorization = \`"Bearer ${r.token}\`" }"`;
+    // Codex は設定ファイル（~/.codex/config.toml）に鍵のヘッダーを書く。前の [mcp_servers.miru]（と下の節 [mcp_servers.miru.*]）は消してから足す（鍵を作り直したときに重ならないように）。
+    // 消すのは見出しの行から次の見出しの手前まで。後ろの節（Codex が足す [projects."…"] など）と、その前の行は触らない（2026-10-25。前の消し方は前の行と次の見出しをつないで、設定を読めなくしていた）。
+    // Windows は [IO.File] で読み書きする（Windows PowerShell 5.1 の Set-Content・Add-Content は UTF-8 で書かず、日本語のパスが化ける）
+    const codexMac = `mkdir -p ~/.codex && touch ~/.codex/config.toml && perl -0pi -e 's/^[ \\t]*\\[mcp_servers\\.miru(?:\\.[^\\]\\n]*)?\\][^\\n]*\\n?(?:(?![ \\t]*\\[).*\\n?)*//mg; s/\\n+\\z/\\n/; s/\\A\\s+\\z//' ~/.codex/config.toml && printf '\\n[mcp_servers.miru]\\nurl = "${mcpUrl}"\\nhttp_headers = { Authorization = "Bearer ${r.token}" }\\n' >> ~/.codex/config.toml`;
+    const codexWin = `$p = "$HOME\\.codex\\config.toml"; New-Item -Force -ItemType Directory "$HOME\\.codex" | Out-Null; $t = if (Test-Path $p) { [IO.File]::ReadAllText($p) } else { '' }; $t = ($t -replace '(?m)^[ \\t]*\\[mcp_servers\\.miru(?:\\.[^\\]\\r\\n]*)?\\][^\\n]*(?:\\n|$)(?:(?![ \\t]*\\[)[^\\n]*(?:\\n|$))*', '') -replace '(\\r?\\n)+\\z', "\`n" -replace '\\A\\s+\\z', ''; [IO.File]::WriteAllText($p, $t + "\`n[mcp_servers.miru]\`nurl = \`"${mcpUrl}\`"\`nhttp_headers = { Authorization = \`"Bearer ${r.token}\`" }\`n")`;
     // 上げる道具（miru_sync.py）: 鍵とこのサイトの場所をファイルに置く。鍵を入れたまま 1 本のコマンドにする
     // （前は「鍵だけコピー」のあとにコマンドをコピーして貼る案内で、そのとき鍵がコマンドの文字に上書きされていた）
     const site = location.origin;
     const syncMac = `mkdir -p ~/.config/miru && printf '%s\\n' '${r.token}' > ~/.config/miru/token && chmod 600 ~/.config/miru/token && printf '%s\\n' '${site}' > ~/.config/miru/url`;
     const syncWin = `New-Item -Force -ItemType Directory "$HOME\\.config\\miru" | Out-Null; [IO.File]::WriteAllText("$HOME\\.config\\miru\\token", '${r.token}'); [IO.File]::WriteAllText("$HOME\\.config\\miru\\url", '${site}')`;
-    $("#tkOut")!.innerHTML = `<div class="small"><b>Claude Code</b>（ターミナルに貼る。前に miru をつないでいたら、先に <span class="code" style="display:inline;padding:1px 6px">claude mcp remove -s user miru</span>）</div><div class="code">${esc(cmd)}</div>
+    $("#tkOut")!.innerHTML = `<div class="small"><b>Claude Code</b>（ターミナルに貼る。前に miru をつないでいたら、先に <span class="code" style="display:inline;padding:1px 6px">claude mcp remove -s user miru</span>。前の画面のコマンドでつないだフォルダーでは <span class="code" style="display:inline;padding:1px 6px">claude mcp remove -s local miru</span> も）</div><div class="code">${esc(cmd)}</div>
       <div class="hstack" style="margin-top:8px"><button class="btn sm" id="tkCopy">コマンドをコピー</button></div>
       <div class="small" style="margin-top:12px"><b>Codex</b>（Mac はターミナル、Windows は PowerShell に貼る。前の miru の設定は置き換わります。Codex を開き直すとつながります）</div>
       <div class="code">${esc(codexMac)}</div>

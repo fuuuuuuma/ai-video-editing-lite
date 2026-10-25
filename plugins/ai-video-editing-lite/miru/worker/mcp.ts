@@ -1,6 +1,6 @@
 // MCP（Claude Code とこのサイトをつなぐ。2026-10-19）。
 //
-//   claude mcp add --transport http miru https://<サイト>/mcp --header "Authorization: Bearer miru_…"
+//   claude mcp add -s user --transport http miru https://<サイト>/mcp --header "Authorization: Bearer miru_…"
 //
 // Streamable HTTP の、状態を持たない形（POST 1 回に JSON 1 つで答える）。鍵は設定の画面で本人が作る。
 // 道具は API（worker/api.ts）を同じ鍵で呼ぶだけなので、見られる範囲・できることは画面と同じ。

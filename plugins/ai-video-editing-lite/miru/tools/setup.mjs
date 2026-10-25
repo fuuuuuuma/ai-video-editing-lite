@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 自分の Cloudflare に MIRU ライトを立てる道具（2026-10-22。2026-10-23 に通し確認・自分で直した所を残す更新・控え・容量）。手順と理由は SETUP.md。
 //
-//   node tools/setup.mjs start --owner you@gmail.com [--name miru] [--dir ~/MIRU] [--account <アカウントID>] [--owner-quota-gb 9] [--reuse] [--no-backup]
+//   node tools/setup.mjs start --owner you@gmail.com [--name miru] [--dir ~/MIRU] [--account <アカウントID>] [--owner-quota-gb 9] [--reuse] [--no-backup] [--force-older]
 //       … 置き場所（D1・R2）を作り、表を作り、画面を作って公開する。最後に Google の設定に入れる URL を出す
 //   node tools/setup.mjs google --client-id <クライアントID>
 //       … Google のクライアント ID を入れて公開し直す。シークレットは本人がターミナルで入れる（この道具は受け取らない）
@@ -281,12 +281,21 @@ const quotaOf = (gbStr) => {
   return Math.round(n * GB);
 };
 
+// Claude Code と Codex は lite を別々に持つ。古い方から動かすと黙って戻ってしまうので止める（update と、start のやり直し）
+function noOlder(from, to) {
+  if (to.build && from?.build && to.build < from.build && !opt["force-older"]) {
+    fail(`入れようとしている MIRU（${verLabel(to)}）は、いま入っているもの（${verLabel(from)}）より古いです。AI動画編集 lite を新しくしてから動かしてください（わざと戻すなら --force-older）`, 8);
+  }
+}
+
 // ── start ──
 async function start() {
   checkNode();
   const owner = String(opt.owner ?? "").trim().toLowerCase();
   if (!/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(owner)) fail("--owner に、あなたの Google アカウントのメールを入れてください（例: --owner you@gmail.com）");
   let prev = readState();
+  if (prev?.installed) noOlder(prev.installed, bundled());
+  const account = opt.account ?? prev?.account;      // 名前を変えてやり直すときも、選んだアカウントは引き継ぐ
   const name = String(opt.name ?? prev?.name ?? "miru").toLowerCase();
   if (!/^[a-z][a-z0-9-]{1,40}$/.test(name)) fail("--name は英小文字・数字・- で（例: miru）");
   if (!prev && existsSync(join(DIR, "wrangler.jsonc"))) fail(`${DIR} の wrangler.jsonc はこの道具が作ったものではありません。別の場所（--dir）を選んでください`);
@@ -301,11 +310,13 @@ async function start() {
   if (r0.conflicts.length) fail(`自分で直した所と新しい版の変更がぶつかったので、まだ公開していません: ${r0.conflicts.join("、")}\n直してから ${self("deploy --resolved")}`, 6);
   await npmInstall();
   await login();
-  // この道具が作ったもの（created）か、前に公開まで済んだ MIRU のものだけを使う。前からある別のものは --reuse が無ければ使わない
+  // この道具が作ったもの（created）か、前に公開まで済んだ MIRU のものだけを使う。前からある別のものは --reuse が無ければ使わない。
+  // created を持たない記録は前の版の setup.mjs が途中まで進めたもので、どれを作ったかを記録していないので、この道具のものとして続ける
+  const legacy = !!prev && !prev.created;
   const created = { ...(prev?.created ?? {}) };
-  const ours = (k) => !!(created[k] || prev?.url || opt.reuse);
+  const ours = (k) => !!(created[k] || prev?.url || legacy || opt.reuse);
   const taken = (what) => fail(`Cloudflare に、もう${what}があります（この道具が作ったものではありません）。前に立てた MIRU を使い直すなら --reuse を付けて、別に立てるなら --name 別の名前 で、もう一度動かしてください`, 7);
-  const remember = (extra = {}) => writeState({ made_by: "miru-setup", ...(prev ?? {}), name, owner, account: opt.account ?? prev?.account, created, ...extra });
+  const remember = (extra = {}) => writeState({ made_by: "miru-setup", ...(prev ?? {}), name, owner, account, created, ...extra });
   say("\n① データの置き場（D1）");
   let id = prev?.database_id ?? null;
   if (!id) {
@@ -329,12 +340,14 @@ async function start() {
     else { explain(r2.out); fail("R2 を作れませんでした。上のエラーを読んでください"); }
   } else created.r2 = true;
   remember({ database_id: id });
-  if (!prev?.url && !opt.reuse) {              // はじめての公開の前に、同じ名前の Worker が無いかを確かめる（あると黙って置き換えてしまう）
+  if (!ours("worker")) {              // はじめての公開の前に、同じ名前の Worker が無いかを確かめる（あると黙って置き換えてしまう）
     const w = await wrangler(["deployments", "list", "--name", name], { capture: true, quiet: true });
     if (w.ok) taken(`「${name}」という名前の Worker（サイト）`);
     if (!/does not exist|10007|not found/i.test(w.out)) explain(w.out);
   }
-  const st = { made_by: "miru-setup", name, owner, database_id: id, account: opt.account ?? prev?.account, created,
+  // 公開で Worker を上げたあとに止まっても（URL を読めない・途中で止めた）、やり直しで「この道具が作ったものではありません」と言わないように、上げる前に記録する
+  created.worker = true;
+  const st = { made_by: "miru-setup", name, owner, database_id: id, account, created,
     google_client_id: prev?.google_client_id ?? "", url: prev?.url ?? null,
     owner_quota: opt["owner-quota-gb"] !== undefined ? quotaOf(opt["owner-quota-gb"]) : prev?.owner_quota ?? DEFAULT_QUOTA };
   writeConfig(st);
@@ -386,10 +399,7 @@ async function update() {
   checkNode();
   const from = st.installed, to = bundled();
   say(`いま: ${verLabel(from)} → 新しい版: ${verLabel(to)}`);
-  // Claude Code と Codex は lite を別々に持つ。古い方から動かすと黙って戻ってしまうので止める
-  if (to.build && from?.build && to.build < from.build && !opt["force-older"]) {
-    fail(`入れようとしている MIRU（${verLabel(to)}）は、いま入っているもの（${verLabel(from)}）より古いです。AI動画編集 lite を新しくしてから動かしてください（わざと戻すなら --force-older）`, 8);
-  }
+  noOlder(from, to);
   stopIfUnresolved();
   const r = install({ strict: true });
   writeFileSync(join(DIR, REPORT), JSON.stringify({ at: new Date().toISOString(), from, to, ...r }, null, 2) + "\n");

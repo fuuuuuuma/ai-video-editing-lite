@@ -265,8 +265,40 @@ test("古い版への入れ替えは止める（--force-older で戻せる）", 
     const r = s.run(["update"]);
     assert.equal(r.code, 8, r.out);
     assert.match(r.out, /古いです/);
+    const again = s.run(["start", "--owner", "taro@gmail.com"]);      // start のやり直しでも黙って戻さない（2026-10-25）
+    assert.equal(again.code, 8, again.out);
+    assert.equal(JSON.parse(readFileSync(join(s.dir, ".miru-setup.json"), "utf8")).installed.build, 10);
     assert.equal(s.run(["update", "--force-older"]).code, 0);
   } finally { s.done(); }
+});
+
+test("やり直しで、自分で上げた Worker・前の版の記録・選んだアカウントを取り違えない（2026-10-25）", () => {
+  // Worker を上げたあとで止まった（workers.dev の名前が無い）→ 名前を登録してもう一度: 7 にしない
+  const s = sandbox();
+  try {
+    assert.equal(s.run(["start", "--owner", "taro@gmail.com"], { FAKE_MODE: "no-subdomain" }).code, 3);
+    const r = s.run(["start", "--owner", "taro@gmail.com"]);
+    assert.equal(r.code, 0, r.out);
+  } finally { s.done(); }
+  // created を持たない前の版の記録（途中で止まったもの）: もう作ってある R2 を自分のものとして続ける
+  const l = sandbox();
+  try {
+    l.run(["start", "--owner", "taro@gmail.com"], { FAKE_MODE: "no-subdomain" });
+    const f = join(l.dir, ".miru-setup.json"), st = JSON.parse(readFileSync(f, "utf8"));
+    delete st.created; writeFileSync(f, JSON.stringify(st));
+    const r = l.run(["start", "--owner", "taro@gmail.com"]);
+    assert.equal(r.code, 0, r.out);
+  } finally { l.done(); }
+  // 公開の前に --name で名前を変えても、選んだアカウントは残る
+  const a = sandbox();
+  try {
+    mkdirSync(a.dir, { recursive: true });
+    writeFileSync(join(a.dir, ".miru-setup.json"), JSON.stringify({ made_by: "miru-setup", name: "miru", owner: "taro@gmail.com", account: "aaa", database_id: "11111111-2222-3333-4444-000000000000", created: { d1: true } }));
+    const r = a.run(["start", "--owner", "taro@gmail.com", "--name", "miru2"], { FAKE_MODE: "multi-account" });
+    assert.equal(r.code, 0, r.out);
+    assert.equal(JSON.parse(readFileSync(join(a.dir, ".miru-setup.json"), "utf8")).account, "aaa");
+    assert.match(readFileSync(join(a.dir, "wrangler.jsonc"), "utf8"), /"account_id": "aaa"/);
+  } finally { a.done(); }
 });
 
 test("前からある別の R2・Worker は、もう一度動かしても --reuse が無ければ使わない。公開の前なら --name で名前を変えられる", () => {

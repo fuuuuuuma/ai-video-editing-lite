@@ -276,7 +276,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
   if (m !== "GET" && m !== "HEAD" && !writable(req, who)) return json({ error: "この画面からだけ" }, 403);
   const seg = p.split("/").filter(Boolean).map(decodeURIComponent);   // ["api", ...] / ["m", ...]
   if (who.via === "token" && who.scope !== "admin" && !workTokenMay(m, seg)) {
-    return json({ error: "この鍵ではできません。MIRU の画面から操作してください（作業用の鍵は、消す・招待する・鍵を作る・編集スキルを置くことができません）" }, 403);
+    return json({ error: "この鍵ではできません。MIRU の画面から操作してください（作業用の鍵では、消す・招待する・鍵を作る・編集スキルを置くことはできません）" }, 403);
   }
 
   // ── 動画・画像・音（招待された人だけ） ──
@@ -566,7 +566,9 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
           // 2026-10-25: 作業用の鍵も断る。鍵が漏れても版を消されないように）。作り直すときは置いた量を数え直さず、作った時刻を今にする
           const cur = await one<{ ready: number }>(db, "SELECT ready FROM versions WHERE video_id = ?1 AND name = ?2", v.id, name);
           if (cur?.ready && !(role === "owner" && strong)) {
-            return json({ error: `${name} はもう上げ終わっています。別の版の名前（${name}-2 など）で上げてください（上げ直せるのは、管理者が MIRU の画面か持ち主用の鍵でするときだけです）` }, 409);
+            // ライトには持ち主用の鍵が無いので、画面で消す案内だけにする
+            const how = editionOf(env) === "light" ? "同じ名前にしたいときは、管理者が MIRU の画面でこの版を消してから" : "上げ直せるのは、管理者が MIRU の画面か持ち主用の鍵でするときだけです";
+            return json({ error: `${name} はもう上げ終わっています。別の版の名前（${name}-2 など）で上げてください（${how}）` }, 409);
           }
           await needRoom(env, v.channel_id, Math.max(0, Number(b.bytes) || 0));
           await exec(db, "INSERT INTO versions (video_id, name, frames, fps, ready, note, created_at) VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6) " +
@@ -680,14 +682,16 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
       const register = async () => {
         const h = await env.MEDIA.head(key);
         if (!h) throw new HttpError(400, "ファイルが上がっていません");
-        await exec(db, "INSERT INTO blobs (video_id, sha, size, type, created_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(video_id, sha) DO NOTHING", v.id, sha, h.size, type, now());
+        // 置いてある中身の大きさを読んで、数えた大きさより大きければ数え直す（2026-10-25。同時に送ると、1 バイトで数えたまま大きな中身が残った）
+        await exec(db, "INSERT INTO blobs (video_id, sha, size, type, created_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(video_id, sha) DO UPDATE SET size = max(size, excluded.size)", v.id, sha, h.size, type, now());
         return h.size;
       };
+      const counted = async () => (await one<{ size: number }>(db, "SELECT size FROM blobs WHERE video_id = ?1 AND sha = ?2", v.id, sha))?.size;
       if (!seg[5] && m === "PUT") {
         const len = Number(req.headers.get("content-length") ?? NaN);
         if (!Number.isFinite(len)) return json({ error: "content-length が要ります" }, 411);
         if (len > 95_000_000) return json({ error: "95MB を超えるものは分けて上げてください（mpu）" }, 413);
-        if (!(await one(db, "SELECT 1 AS x FROM blobs WHERE video_id = ?1 AND sha = ?2", v.id, sha))) {
+        if ((await counted()) === undefined) {
           await needRoom(env, v.channel_id, len);
           await env.MEDIA.put(key, req.body ?? new Uint8Array(), { httpMetadata: { contentType: type } });
         }
@@ -695,11 +699,10 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
       }
       if (seg[5] === "mpu") {
         const id = seg[6];
-        const registered = async () => !!(await one(db, "SELECT 1 AS x FROM blobs WHERE video_id = ?1 AND sha = ?2", v.id, sha));
         // 置いてある blob に上書きしない（2026-10-25。1 バイトで登録してから大きな中身で上書きすると、大きさが数えられなかった。
         // 共有なので、ほかの版の中身も変わってしまう）
         if (!id && m === "POST") {
-          if (await registered()) return json({ error: "もう置いてあります", exists: true }, 409);
+          if ((await counted()) !== undefined) return json({ error: "もう置いてあります", exists: true }, 409);
           await needRoom(env, v.channel_id, Math.max(0, Number(url.searchParams.get("size")) || 0));
           const up = await env.MEDIA.createMultipartUpload(key, { httpMetadata: { contentType: type } });
           await exec(db, "INSERT INTO uploads (id, video_id, bytes, created_at) VALUES (?1, ?2, 0, ?3) ON CONFLICT(id) DO NOTHING", up.uploadId, v.id, now());
@@ -719,12 +722,19 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
         }
         if (id && seg[7] === "complete" && m === "POST") {
           const b = await readJson<{ parts?: { partNumber: number; etag: string }[] }>(req);
-          if (await registered()) { await abortUpload(env, key, id, v.id); return json({ error: "もう置いてあります", exists: true }, 409); }
+          // もう置いてあれば上書きせずに、置いてあるものを返す（前の complete の返事が届かずに送り直したときも、ここで成功になる。
+          // 2026-10-25: 前は 409 で、上げる道具が止まった）
+          const had = await counted();
+          if (had !== undefined) { await abortUpload(env, key, id, v.id); return json({ ok: true, size: had, exists: true }); }
           await env.MEDIA.resumeMultipartUpload(key, id).complete(b.parts ?? []);
           await exec(db, "DELETE FROM uploads WHERE id = ?1 AND video_id = ?2", id, v.id);    // 途中の分は blobs に移る
-          // できあがった大きさでも上限を確かめる。超えていれば置かない（2026-10-23）
-          if (!(await one(db, "SELECT 1 AS x FROM blobs WHERE video_id = ?1 AND sha = ?2", v.id, sha))) {
-            try { await needRoom(env, v.channel_id, (await env.MEDIA.head(key))?.size ?? 0); } catch (e) { await env.MEDIA.delete(key); throw e; }
+          // できあがった大きさでも上限を確かめる。超えていれば置かない（2026-10-23）。
+          // 待つ間にほかの送信が同じ sha を小さく数えていたら、その差を確かめる（2026-10-25。数えたのが 1 バイトのまま、上限をすり抜けられた）
+          const size = (await env.MEDIA.head(key))?.size ?? 0;
+          try { await needRoom(env, v.channel_id, Math.max(0, size - ((await counted()) ?? 0))); } catch (e) {
+            await env.MEDIA.delete(key);
+            await exec(db, "DELETE FROM blobs WHERE video_id = ?1 AND sha = ?2", v.id, sha);    // 中身を消したので、数えも外す
+            throw e;
           }
           return json({ ok: true, size: await register() });
         }
