@@ -38,7 +38,7 @@ export const TOOLS: Tool[] = [
     run: (a, call) => call("PATCH", `/api/videos/${enc(a.video)}`, { status: a.status }) },
   { name: "preview_link", description: "動画の確認画面のリンク（版を省くと最新）", inputSchema: obj({ video: str("動画の名前"), version: str("v10 など") }, ["video"]),
     run: async (a, _call, origin) => ({ link: `${origin}/v/${enc(a.video)}${a.version ? `?ver=${enc(a.version)}` : ""}` }) },
-  { name: "get_channel_kit", description: "チャンネルのトンマナ（字幕の見た目・続けるルール）と、採用済みの強調デザイン。編集の前に読み、採用済みのデザインだけを使う。スキルでは miru_sync.py kit-pull が同じものを手元の記憶に入れる", inputSchema: obj({ channel: str("チャンネルの名前（ai-monetize など。list_channels の id）") }, ["channel"]),
+  { name: "get_channel_kit", description: "チャンネルのトンマナ（字幕の見た目・続けるルール）と、採用済みの強調デザイン。編集の前に読み、採用済みのデザインだけを使う。スキルでは miru_sync.py kit-pull が同じものを手元の記憶に入れる", inputSchema: obj({ channel: str("チャンネルの名前（my-channel など。list_channels の id）") }, ["channel"]),
     async run(a, call) {
       const k = await call("GET", `/api/channels/${enc(a.channel)}/kit`) as { kit: Record<string, unknown> | null; role: string; updated_at: number | null; updated_by: string | null };
       const d = await call("GET", `/api/channels/${enc(a.channel)}/designs`) as { roles: unknown[]; designs: { id: string; role: string; name: string; status: string; memo?: string }[] };

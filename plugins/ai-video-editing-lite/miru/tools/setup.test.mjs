@@ -44,17 +44,20 @@ const multi = () => { if (mode === "multi-account" && !process.env.CLOUDFLARE_AC
 if (w[0] === "whoami") process.exit(0);
 if (w[0] === "login") process.exit(0);
 if (w[0] === "d1" && w[1] === "list") { multi(); out(JSON.stringify(st.d1.map((n) => ({ name: n, uuid: "11111111-2222-3333-4444-" + n.padEnd(12, "0").slice(0, 12).replace(/[^0-9a-f]/g, "0") })))); process.exit(0); }
-if (w[0] === "d1" && w[1] === "create") { multi(); st.d1.push(w[2]); save(); out('"database_id": "11111111-2222-3333-4444-' + w[2].padEnd(12, "0").slice(0, 12).replace(/[^0-9a-f]/g, "0") + '"'); process.exit(0); }
+if (w[0] === "d1" && w[1] === "create") { multi(); if (st.d1.includes(w[2])) err("A database with that name already exists"); st.d1.push(w[2]); save(); out('"database_id": "11111111-2222-3333-4444-' + w[2].padEnd(12, "0").slice(0, 12).replace(/[^0-9a-f]/g, "0") + '"'); process.exit(0); }
 if (w[0] === "r2" && w[1] === "bucket" && w[2] === "create") {
   if (mode === "r2-disabled") err("Please enable R2 through the Cloudflare Dashboard. [code: 10042]");
   if (st.r2.includes(w[3])) err("The bucket you tried to create already exists, and you own it. [code: 10004]");
   st.r2.push(w[3]); save(); process.exit(0);
 }
+if (w[0] === "d1" && w[1] === "migrations" && w[2] === "list") { out(process.env.FAKE_PENDING === "0" ? "No migrations to apply!" : "Migrations to be applied: 0006_x.sql"); process.exit(0); }
 if (w[0] === "d1" && w[1] === "migrations") process.exit(0);
+if (w[0] === "deployments" && w[1] === "list") { if ((st.workers ?? []).includes(w[w.indexOf("--name") + 1])) { out("Created: 2026"); process.exit(0); } err("This Worker does not exist on your account. [code: 10007]"); }
 if (w[0] === "d1" && w[1] === "export") { const o = w[w.indexOf("--output") + 1]; writeFileSync(o, "-- dump"); process.exit(0); }
 if (w[0] === "deploy") {
   if (mode === "no-subdomain") err("You need to register a workers.dev subdomain before publishing to workers.dev\\nhttps://dash.cloudflare.com/abc123/workers/onboarding");
   if (mode === "unverified") err("Your email address must be verified before you can deploy. [code: 10034]");
+  st.workers = [...new Set([...(st.workers ?? []), "miru"])]; save();
   out("Uploaded miru\\nDeployed miru triggers\\n  https://miru.taro.workers.dev"); process.exit(0);
 }
 if (w[0] === "secret" && w[1] === "list") { out(process.env.FAKE_SECRET ? '[{"name":"GOOGLE_CLIENT_SECRET"}]' : "[]"); process.exit(0); }
@@ -118,7 +121,7 @@ test("start: 止まりやすい所は、することを言って決まったコ�
 test("start: 前からある同じ名前の D1・R2 は、--reuse が無ければ使わない", () => {
   const s = sandbox();
   try {
-    writeFileSync(join(s.root, "cf.json"), JSON.stringify({ d1: ["miru"], r2: [] }));
+    writeFileSync(join(s.root, "cf.json"), JSON.stringify({ d1: ["miru"], r2: [], workers: [] }));
     const r = s.run(["start", "--owner", "taro@gmail.com"]);
     assert.equal(r.code, 7, r.out);
     assert.match(r.out, /--reuse/);
@@ -231,4 +234,87 @@ test("check: サイト・Google・この PC とのつながりを確かめ、直
     assert.match(r.out, /✓ 鍵で入れる（taro@gmail.com）/);
     assert.match(r.out, /通し確認は全部通りました/);
   } finally { server.close(); s.done(); }
+});
+
+test("ぶつかったまま update・start をもう一度動かしても、新しい版の変更を消さない（2026-10-25）", { skip: !hasGit && "git が無い" }, () => {
+  const s = sandbox();
+  try {
+    s.run(["start", "--owner", "taro@gmail.com"]);
+    writeFileSync(join(s.dir, "worker", "app.ts"), "export const a = 1;\nexport const b = 'mine';\nexport const c = 3;\n");
+    writeFileSync(join(s.src, "worker", "app.ts"), "export const a = 1;\nexport const b = 'theirs';\nexport const c = 3;\n");
+    writeFileSync(join(s.src, "VERSION.json"), JSON.stringify({ build: 11, date: "2026-10-25", commit: "b", feed: "" }));
+    assert.equal(s.run(["update"]).code, 6);
+    const deploys = () => s.calls().filter((c) => c.includes("deploy")).length, n = deploys();
+    for (const args of [["update"], ["start", "--owner", "taro@gmail.com"], ["deploy"]]) {
+      const r = s.run(args);
+      assert.equal(r.code, 6, `${args[0]}: ${r.out}`);
+      assert.match(r.out, /deploy --resolved/);
+    }
+    assert.equal(deploys(), n, "公開しない");
+    assert.match(readFileSync(join(s.dir, ".miru-upstream", "worker", "app.ts"), "utf8"), /theirs/, "新しい版の写しは残る");
+    assert.match(readFileSync(join(s.dir, ".miru-upstream-prev", "worker", "app.ts"), "utf8"), /b = 2/, "前の版の写しも残る");
+    assert.match(readFileSync(join(s.dir, "worker", "app.ts"), "utf8"), /mine/, "あなたの直しも残る");
+  } finally { s.done(); }
+});
+
+test("古い版への入れ替えは止める（--force-older で戻せる）", () => {
+  const s = sandbox();
+  try {
+    s.run(["start", "--owner", "taro@gmail.com"]);
+    writeFileSync(join(s.src, "VERSION.json"), JSON.stringify({ build: 9, date: "2026-10-20", commit: "old", feed: "" }));
+    const r = s.run(["update"]);
+    assert.equal(r.code, 8, r.out);
+    assert.match(r.out, /古いです/);
+    assert.equal(s.run(["update", "--force-older"]).code, 0);
+  } finally { s.done(); }
+});
+
+test("前からある別の R2・Worker は、もう一度動かしても --reuse が無ければ使わない。公開の前なら --name で名前を変えられる", () => {
+  const s = sandbox();
+  try {
+    writeFileSync(join(s.root, "cf.json"), JSON.stringify({ d1: [], r2: ["miru-media"], workers: [] }));
+    assert.equal(s.run(["start", "--owner", "taro@gmail.com"]).code, 7);
+    assert.equal(s.run(["start", "--owner", "taro@gmail.com"]).code, 7, "2 回目も使わない");
+    const r = s.run(["start", "--owner", "taro@gmail.com", "--name", "miru2"]);
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /作り直します/);
+  } finally { s.done(); }
+  const w = sandbox();
+  try {
+    writeFileSync(join(w.root, "cf.json"), JSON.stringify({ d1: [], r2: [], workers: ["miru"] }));
+    const x = w.run(["start", "--owner", "taro@gmail.com"]);
+    assert.equal(x.code, 7, x.out);
+    assert.match(x.out, /Worker/);
+    assert.equal(w.run(["start", "--owner", "taro@gmail.com", "--reuse"]).code, 0);
+  } finally { w.done(); }
+});
+
+test("写しの無い場所に違うファイルがあると、update は止まる（--force で控えてから入れ替える）", () => {
+  const s = sandbox();
+  try {
+    s.run(["start", "--owner", "taro@gmail.com"]);
+    rmSync(join(s.dir, ".miru-upstream"), { recursive: true, force: true });
+    writeFileSync(join(s.dir, "worker", "app.ts"), "export const mine = 1;\n");
+    const r = s.run(["update"]);
+    assert.equal(r.code, 6, r.out);
+    assert.match(r.out, /worker\/app\.ts/);
+    assert.equal(readFileSync(join(s.dir, "worker", "app.ts"), "utf8"), "export const mine = 1;\n", "まだ何も変えない");
+    assert.equal(s.run(["update", "--force"]).code, 0);
+    const kept = readdirSync(join(s.dir, "backups")).find((f) => f.startsWith("files-"));
+    assert.ok(kept && existsSync(join(s.dir, "backups", kept, "worker", "app.ts")), "控えてから入れ替え");
+  } finally { s.done(); }
+});
+
+test("表を足すときだけ控えを取る。案内のコマンドはどこからでも通る形", () => {
+  const s = sandbox();
+  try {
+    const st = s.run(["start", "--owner", "taro@gmail.com"]);
+    assert.ok(st.out.includes(`node "${join(s.dir, "tools", "setup.mjs")}" google --client-id`), st.out);
+    const count = () => (existsSync(join(s.dir, "backups")) ? readdirSync(join(s.dir, "backups")).filter((f) => f.endsWith(".sql")).length : 0);
+    const before = count();
+    assert.equal(s.run(["deploy"], { FAKE_PENDING: "0" }).code, 0);
+    assert.equal(count(), before, "足す表が無ければ控えない");
+    assert.equal(s.run(["deploy"]).code, 0);
+    assert.equal(count(), before + 1, "足す表があれば控える");
+  } finally { s.done(); }
 });

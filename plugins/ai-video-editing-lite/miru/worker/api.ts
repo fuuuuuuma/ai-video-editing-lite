@@ -397,6 +397,9 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
       if (m === "GET") return json({ members: await members(db, cid), role });
       const owners = async () => (await one<{ n: number }>(db, "SELECT count(*) AS n FROM members WHERE channel_id = ?1 AND role = 'owner'", cid))?.n ?? 0;
       const roleOf = async (email: string) => (await one<{ role: Role }>(db, "SELECT role FROM members WHERE channel_id = ?1 AND email = ?2", cid, email))?.role;
+      // チャンネルを作った人（容量はこの人に数える）は、本人のほかが外したり役割を下げたりできない（2026-10-25）
+      const creator = (await creatorOf(db, cid)).toLowerCase();
+      const touchesCreator = (email: string) => !!creator && emailKey(email) === emailKey(creator) && emailKey(email) !== emailKey(self);
       if (m === "POST") {
         const b = await readJson<{ email?: string; role?: Role }>(req);
         let email = String(b.email ?? "").trim().toLowerCase();
@@ -410,6 +413,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
           email = known.find((k) => emailKey(k.email) === key)?.email ?? email;
         }
         const r: Role = b.role === "owner" || b.role === "editor" ? b.role : "viewer";
+        if (r !== "owner" && touchesCreator(email)) return json({ error: "チャンネルを作った人の役割は変えられません" }, 403);
         const n = await one<{ n: number }>(db, "SELECT count(*) AS n FROM members WHERE channel_id = ?1", cid);
         if ((n?.n ?? 0) >= 50 && !(await roleOf(email))) return json({ error: "招待は 1 チャンネル 50 人までです" }, 400);
         if (r !== "owner" && (await roleOf(email)) === "owner" && (await owners()) <= 1) return json({ error: "管理者が 1 人もいなくなります。先に別の人を管理者にしてください" }, 400);
@@ -419,6 +423,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
       }
       if (m === "DELETE" && seg[4]) {
         const email = seg[4].toLowerCase();
+        if (touchesCreator(email)) return json({ error: "チャンネルを作った人は外せません" }, 403);
         if ((await roleOf(email)) === "owner" && (await owners()) <= 1) return json({ error: "管理者が 1 人もいなくなります。先に別の人を管理者にしてください" }, 400);
         await exec(db, "DELETE FROM members WHERE channel_id = ?1 AND email = ?2", cid, email);
         return json({ ok: true, members: await members(db, cid) });
@@ -526,6 +531,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
     if (!v || !role) return json({ error: "ありません" }, 404);      // 無いのと見られないのは同じ答え
     const sub = seg[3];
     const need = (r: Role) => { if (RANK[role] < RANK[r]) throw new HttpError(403, r === "owner" ? "管理者だけができます" : "見るだけの権限です"); };
+    const strong = who.via === "cookie" || who.scope === "admin";     // 画面か、持ち主用の鍵（作業用の鍵ではない）
 
     if (!sub) {
       if (m === "GET") return json({ video: v, role, versions: await versionsOf(db, v.id), openNotes: await openNotes(db, v.id) });
@@ -556,25 +562,35 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
           const name = String(b.name ?? "");
           if (!VER_RE.test(name)) return json({ error: "版の名前（v10 など）が使えません" }, 400);
           const frames = Math.max(1, Math.floor(Number(b.frames)) || 0), fps = Number(b.fps) || 30;
-          // 上げ終わった版を作り直すと見えなくなり、翌日の掃除で消える。消せるのは管理者だけなので、作り直しも管理者だけ（2026-10-23）
+          // 上げ終わった版を作り直すと見えなくなる。消すのと同じなので、管理者が画面か持ち主用の鍵でするときだけ（2026-10-23。
+          // 2026-10-25: 作業用の鍵も断る。鍵が漏れても版を消されないように）。作り直すときは置いた量を数え直さず、作った時刻を今にする
           const cur = await one<{ ready: number }>(db, "SELECT ready FROM versions WHERE video_id = ?1 AND name = ?2", v.id, name);
-          if (cur?.ready && RANK[role!] < RANK.owner) return json({ error: `${name} はもう上げ終わっています。別の版の名前で上げてください（上げ直せるのは管理者だけです）` }, 409);
+          if (cur?.ready && !(role === "owner" && strong)) {
+            return json({ error: `${name} はもう上げ終わっています。別の版の名前（${name}-2 など）で上げてください（上げ直せるのは、管理者が MIRU の画面か持ち主用の鍵でするときだけです）` }, 409);
+          }
           await needRoom(env, v.channel_id, Math.max(0, Number(b.bytes) || 0));
           await exec(db, "INSERT INTO versions (video_id, name, frames, fps, ready, note, created_at) VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6) " +
-            "ON CONFLICT(video_id, name) DO UPDATE SET frames = ?3, fps = ?4, ready = 0, bytes = 0, note = ?5", v.id, name, frames, fps, String(b.note ?? "").slice(0, 500), now());
+            "ON CONFLICT(video_id, name) DO UPDATE SET frames = ?3, fps = ?4, ready = 0, note = ?5, created_at = ?6", v.id, name, frames, fps, String(b.note ?? "").slice(0, 500), now());
           return json({ ok: true });
         }
       }
       if (!VER_RE.test(ver)) return json({ error: "版の名前が使えません" }, 400);
-      const verRow = await one<{ name: string }>(db, "SELECT name FROM versions WHERE video_id = ?1 AND name = ?2", v.id, ver);
+      const verRow = await one<{ name: string; ready: number }>(db, "SELECT name, ready FROM versions WHERE video_id = ?1 AND name = ?2", v.id, ver);
       if (!verRow) return json({ error: "その版はありません" }, 404);
+      // 上げ終わった版は、字幕の見た目と書体（miru_sync.py style）のほかは変えない（2026-10-25。上書きされると元に戻せない）。
+      // 変えられるのは管理者が画面か持ち主用の鍵でするときだけ
+      const sealed = !!verRow.ready && !(role === "owner" && strong);
+      const styleOnly = (path: string) => path === "caption-style.json" || path.startsWith("fonts/");
+      const refuseSealed = () => json({ error: `${ver} はもう上げ終わっています。変えるときは別の版の名前で上げてください` }, 409);
       const base = `v/${v.id}/${ver}/`;
       const op = seg[5];
       if (op === "files") {                       // 1 つのファイルを置く（95MB まで）
         need("editor");
         const path = seg.slice(6).join("/");
         if (m !== "PUT" || !PATH_RE.test(path)) return json({ error: "置けません" }, 400);
-        const len = Number(req.headers.get("content-length") ?? 0);
+        if (sealed && !styleOnly(path)) return refuseSealed();
+        const len = Number(req.headers.get("content-length") ?? NaN);
+        if (!Number.isFinite(len)) return json({ error: "content-length が要ります" }, 411);
         if (len > 95_000_000) return json({ error: "95MB を超えるものは分けて上げてください（mpu）" }, 413);
         await needRoom(env, v.channel_id, len);
         await env.MEDIA.put(base + path, req.body ?? new Uint8Array(), { httpMetadata: { contentType: typeOf(req, path) } });
@@ -586,10 +602,12 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
         const path = url.searchParams.get("path") ?? "";
         if (!PATH_RE.test(path)) return json({ error: "名前が使えません" }, 400);
         const id = seg[6];
+        if (sealed && !styleOnly(path) && seg[7] !== "abort") return refuseSealed();
         if (!id && m === "POST") {
           const t = url.searchParams.get("type") ?? "";
           await needRoom(env, v.channel_id, Math.max(0, Number(url.searchParams.get("size")) || 0));
           const up = await env.MEDIA.createMultipartUpload(base + path, { httpMetadata: { contentType: TYPES.test(t) ? t : contentType(path) } });
+          await exec(db, "INSERT INTO uploads (id, video_id, bytes, created_at) VALUES (?1, ?2, 0, ?3) ON CONFLICT(id) DO NOTHING", up.uploadId, v.id, now());
           return json({ uploadId: up.uploadId });
         }
         if (id && seg[7] && m === "PUT") {
@@ -600,17 +618,19 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
           if (len > 100_000_000) return json({ error: "1 つの片は 100MB までです" }, 413);
           await needRoom(env, v.channel_id, len);
           const part = await env.MEDIA.resumeMultipartUpload(base + path, id).uploadPart(n, req.body);
-          await addBytes(db, v.id, ver, len);
+          // 途中の片は版ではなく uploads に積む（2026-10-25。版に足すと、ready の数え直しで途中の片が消え、そのあと complete した分が数えられなかった）
+          await addUpload(db, id, v.id, len);
           return json(part);
         }
         if (id && seg[7] === "complete" && m === "POST") {
           const b = await readJson<{ parts?: { partNumber: number; etag: string }[] }>(req);
           await env.MEDIA.resumeMultipartUpload(base + path, id).complete(b.parts ?? []);
+          await exec(db, "DELETE FROM uploads WHERE id = ?1 AND video_id = ?2", id, v.id);
+          await addBytes(db, v.id, ver, (await env.MEDIA.head(base + path))?.size ?? 0);     // できあがった大きさを版に数える
           return json({ ok: true, path });
         }
         if (id && seg[7] === "abort" && m === "POST") {     // 途中でやめた分を R2 から捨てる
-          try { await env.MEDIA.resumeMultipartUpload(base + path, id).abort(); } catch { /* もう無い */ }
-          return json({ ok: true });
+          return json({ ok: await abortUpload(env, base + path, id, v.id) });
         }
       }
       if (op === "ready" && m === "POST") {       // 全部上がった
@@ -631,7 +651,8 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
         need("editor");
         const b = await readJson<{ links?: { path?: string; sha?: string }[] }>(req, 2_000_000);
         const items = (b.links ?? []).filter((x) => typeof x.path === "string" && PATH_RE.test(x.path) && typeof x.sha === "string" && SHA_RE.test(x.sha))
-          .slice(0, 5000).map((x) => ({ path: x.path, sha: x.sha }));
+          .slice(0, 5000).map((x) => ({ path: x.path as string, sha: x.sha as string }));
+        if (sealed && items.some((x) => !styleOnly(x.path))) return refuseSealed();
         const arr = JSON.stringify(items);
         const has = "EXISTS (SELECT 1 FROM blobs b WHERE b.video_id = ?1 AND b.sha = j.value ->> 'sha')";
         const linked = await exec(db, "INSERT OR REPLACE INTO links (video_id, version, path, sha) " +
@@ -674,7 +695,11 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
       }
       if (seg[5] === "mpu") {
         const id = seg[6];
+        const registered = async () => !!(await one(db, "SELECT 1 AS x FROM blobs WHERE video_id = ?1 AND sha = ?2", v.id, sha));
+        // 置いてある blob に上書きしない（2026-10-25。1 バイトで登録してから大きな中身で上書きすると、大きさが数えられなかった。
+        // 共有なので、ほかの版の中身も変わってしまう）
         if (!id && m === "POST") {
+          if (await registered()) return json({ error: "もう置いてあります", exists: true }, 409);
           await needRoom(env, v.channel_id, Math.max(0, Number(url.searchParams.get("size")) || 0));
           const up = await env.MEDIA.createMultipartUpload(key, { httpMetadata: { contentType: type } });
           await exec(db, "INSERT INTO uploads (id, video_id, bytes, created_at) VALUES (?1, ?2, 0, ?3) ON CONFLICT(id) DO NOTHING", up.uploadId, v.id, now());
@@ -689,12 +714,12 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
           await needRoom(env, v.channel_id, len);
           const part = await env.MEDIA.resumeMultipartUpload(key, id).uploadPart(n, req.body);
           // 途中の片も容量に数える（2026-10-24。数えないと、終わらせないまま片を積んで上限をすり抜けられた）。同じ番号の上げ直しは多めに数える
-          await exec(db, "INSERT INTO uploads (id, video_id, bytes, created_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(id) DO UPDATE SET bytes = bytes + ?3 WHERE video_id = ?2",
-            id, v.id, Math.floor(len), now());
+          await addUpload(db, id, v.id, len);
           return json(part);
         }
         if (id && seg[7] === "complete" && m === "POST") {
           const b = await readJson<{ parts?: { partNumber: number; etag: string }[] }>(req);
+          if (await registered()) { await abortUpload(env, key, id, v.id); return json({ error: "もう置いてあります", exists: true }, 409); }
           await env.MEDIA.resumeMultipartUpload(key, id).complete(b.parts ?? []);
           await exec(db, "DELETE FROM uploads WHERE id = ?1 AND video_id = ?2", id, v.id);    // 途中の分は blobs に移る
           // できあがった大きさでも上限を確かめる。超えていれば置かない（2026-10-23）
@@ -703,17 +728,15 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
           }
           return json({ ok: true, size: await register() });
         }
-        if (id && seg[7] === "abort" && m === "POST") {
-          try { await env.MEDIA.resumeMultipartUpload(key, id).abort(); } catch { /* もう無い */ }
-          await exec(db, "DELETE FROM uploads WHERE id = ?1 AND video_id = ?2", id, v.id);
-          return json({ ok: true });
-        }
+        if (id && seg[7] === "abort" && m === "POST") return json({ ok: await abortUpload(env, key, id, v.id) });
       }
     }
 
     if (sub === "thumb" && m === "PUT") {
       need("editor");
-      if (Number(req.headers.get("content-length") ?? 0) > MAX_IMAGE_BYTES) return json({ error: "画像が大きすぎます（10MB まで）" }, 413);
+      const len = Number(req.headers.get("content-length") ?? NaN);
+      if (!Number.isFinite(len)) return json({ error: "content-length が要ります" }, 411);
+      if (len > MAX_IMAGE_BYTES) return json({ error: "画像が大きすぎます（10MB まで）" }, 413);
       await env.MEDIA.put(`v/${v.id}/thumb.jpg`, req.body ?? new Uint8Array(), { httpMetadata: { contentType: "image/jpeg" } });
       await exec(db, "UPDATE videos SET thumb = ?2, updated_at = ?3 WHERE id = ?1", v.id, `v/${v.id}/thumb.jpg`, now());
       return json({ ok: true });
@@ -846,6 +869,17 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
   return json({ error: "ありません" }, 404);
 }
 
+/** 分割アップロードの途中の片を uploads に積む（容量に数える）。同じ番号の上げ直しは多めに数える */
+const addUpload = (db: D1Database, id: string, vid: string, len: number) =>
+  exec(db, "INSERT INTO uploads (id, video_id, bytes, created_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(id) DO UPDATE SET bytes = bytes + ?3 WHERE video_id = ?2",
+    id, vid, Math.floor(len), Date.now());
+/** 分割アップロードをやめる。R2 でやめられたときだけ uploads から外す（2026-10-25。違う道で送ると、R2 ではやめられないのに数えから外れた）。
+ *  外せなかった行は毎日の掃除で 7 日後に消える */
+async function abortUpload(env: Env, key: string, id: string, vid: string): Promise<boolean> {
+  try { await env.MEDIA.resumeMultipartUpload(key, id).abort(); } catch { return false; }
+  await exec(env.DB, "DELETE FROM uploads WHERE id = ?1 AND video_id = ?2", id, vid);
+  return true;
+}
 const addBytes = (db: D1Database, vid: string, ver: string, len: number) =>
   // 上げ終わった版に足したもの（字幕の見た目・書体の置き直しなど）も数える。数えないと上限をすり抜けられた（2026-10-23）
   len > 0 ? exec(db, "UPDATE versions SET bytes = bytes + ?3 WHERE video_id = ?1 AND name = ?2", vid, ver, Math.floor(len)) : Promise.resolve(0);
@@ -874,7 +908,7 @@ const versionsOf = (db: D1Database, vid: string) =>
 /** 人のメールは管理者だけに見せる（2026-10-24 セキュリティ確認）。ほかの人には Google の名前（無ければ「チャンネルの人」）。
  *  招待した人の一覧（members）は前から管理者だけ。修正指示を書いた人・デザインを決めた人・トンマナを直した人も同じにする */
 export const personOf = (email: string | null | undefined, name: string | null | undefined, owner: boolean) =>
-  !email ? null : owner ? email : name || "チャンネルの人";
+  !email ? null : owner ? email : name && !name.includes("@") ? name : "チャンネルの人";    // 名前が無い人は name にメールが入る（auth.ts）
 const nameOf = async (db: D1Database, email: string | null) =>
   email ? (await one<{ name: string }>(db, "SELECT name FROM users WHERE email = ?1 ORDER BY created_at LIMIT 1", email))?.name ?? null : null;
 const notesOf = async (db: D1Database, vid: string, owner: boolean) =>

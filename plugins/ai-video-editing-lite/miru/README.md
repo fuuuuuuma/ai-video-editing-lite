@@ -3,7 +3,7 @@
 AI動画編集 lite が作った動画を見て、修正指示を書き込む確認サイトです。**あなた自身の Cloudflare に、あなた専用の MIRU を立てて使います**。
 
 - 立て方: [SETUP.md](SETUP.md)（AI に Claude Code は `/ai-video-editing-lite:miru-setup`、Codex は `$miru-setup` と送ると進めます）
-- 困ったら: `node tools/setup.mjs check`（通し確認。直す所を 1 つずつ言います）
+- 困ったら: `node ~/MIRU/tools/setup.mjs check`（通し確認。直す所を 1 つずつ言います）
 
 このフォルダーは「配られた元」です。立てると、中身が `~/MIRU`（Windows は `C:\Users\あなた\MIRU`）に写され、そこから公開されます。
 
@@ -12,12 +12,12 @@ AI動画編集 lite が作った動画を見て、修正指示を書き込む確
 MIRU はあなたの Cloudflare で動くあなたのものなので、好きに直せます。
 
 1. AI に頼みます。例: 「MIRU のホームの並びを新しい順にして」「確認画面の字幕を大きくして」。
-2. AI は `~/MIRU` のファイルを直し、`node tools/setup.mjs deploy` で公開し直します（型の確認で止まったら公開しません）。
-3. 直したファイルの一覧は `node tools/setup.mjs changes` で見られます。
+2. AI は `~/MIRU` のファイルを直し、`node ~/MIRU/tools/setup.mjs deploy` で公開し直します（型の確認で止まったら公開しません）。
+3. 直したファイルの一覧は `node ~/MIRU/tools/setup.mjs changes` で見られます。
 
 **新しい版が出ても、直した所は残ります。** `update` は、入れた版の写し（`~/MIRU/.miru-upstream/`）を元に、あなたの変更と新しい版の変更を混ぜます。同じ所を両方が変えていたときだけ、公開せずに止まり、どのファイルかを言います（AI が両方を入れて `deploy --resolved` で続けます）。
 
-鍵について: Claude Code・Codex・上げる道具に置く鍵は「作業用」で、消す・招待する・鍵を作るはできません（漏れたときに困らないように）。自分用に直すときも、この決まりは残してください（`worker/api.ts` の `workTokenMay`）。
+鍵について: Claude Code・Codex・上げる道具に置く鍵は「作業用」で、消す・招待する・鍵を作ることはできません（漏れたときに困らないように）。自分用に直すときも、この決まりは残してください（`worker/api.ts` の `workTokenMay`）。
 
 直すときの決まり:
 - 直すのは `~/MIRU` の中だけ。このフォルダー（配られた元）は、AI動画編集 lite を更新すると入れ替わります。
@@ -42,11 +42,11 @@ MIRU はあなたの Cloudflare で動くあなたのものなので、好きに
 | `wrangler.example.jsonc` | 設定のひな形（`setup.mjs` がこれから `wrangler.jsonc` を作る） |
 | `VERSION.json` | この MIRU の版 |
 
-手元で試す: `npm install` → `npm run build` → `npm run worker`（http://localhost:8790。`/auth/dev?email=you@example.com` で仮ログイン。`wrangler.dev.jsonc` のときだけ）。
+手元で試す: `npm install` → `npx wrangler d1 migrations apply miru --local -c wrangler.dev.jsonc`（手元の表を作る。1 回だけ）→ `npm run build` → `npm run worker`（http://localhost:8790。`/auth/dev?email=owner@example.com` で仮ログイン。`wrangler.dev.jsonc` のときだけ）。
 
 ## やめる
 
-1. 控えを取る: `node tools/setup.mjs backup`
+1. 控えを取る: `node ~/MIRU/tools/setup.mjs backup`
 2. Cloudflare のダッシュボード（https://dash.cloudflare.com/）で、Workers & Pages の MIRU（既定の名前は `miru`）、D1 の `miru`、R2 の `miru-media` を消します（R2 は中を空にしてから消せます）。
 3. Google Cloud の MIRU のプロジェクトを消し、`~/MIRU` と `~/.config/miru` を消します。
 

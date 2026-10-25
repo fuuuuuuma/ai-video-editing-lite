@@ -1,6 +1,6 @@
 {
   "name": "miru-light",
-  "version": "0.0.34",
+  "version": "0.0.35",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,6 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
     "test": "node --test tools/setup.test.mjs",
     "deploy": "node tools/setup.mjs deploy",
-    "release-light": "node tools/release-light.mjs",
     "setup": "node tools/setup.mjs"
   },
   "devDependencies": {

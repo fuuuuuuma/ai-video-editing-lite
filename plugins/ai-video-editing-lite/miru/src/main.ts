@@ -304,7 +304,7 @@ async function pageGuide() {
       ${step("タスクで進み具合を見る", "タスクに修正指示が並びます。右へフリックで「対応中」→「済」、左へで戻します。")}
     </div>
     <h2>作る人（Claude Code）</h2><div class="steps">
-      ${step("つなぐ", "設定の「Claude Code とつなぐ」で鍵を作り、出てきたコマンドを一度だけ実行します。")}
+      ${step("つなぐ", "設定の「Claude Code・Codex とつなぐ」で鍵を作り、出てきたコマンドを一度だけ実行します。")}
       ${step("プレビューを上げる", "動画を作ったら Claude Code がこのサイトへ上げ、リンクを送ります。")}
       ${step("指示を読んで次の版へ", "Claude Code は修正指示と手直しを読み、次の版を作って返事を書きます。前の版の手直しは全部引き継がれ、手直しタブで 1 件ずつ確かめられます。")}
     </div>
@@ -322,7 +322,7 @@ async function pageSettings() {
     <div class="glass card stack">
       <div class="small muted">鍵を作ると、Claude Code と Codex に貼るコマンドが出ます。鍵はこの画面で一度しか見られません。</div>
       <div class="hstack"><input id="tkLabel" placeholder="鍵の名前（例: 自分の Mac）" style="flex:1"><button class="btn primary" id="tkMake">鍵を作る</button></div>
-      <div class="small muted">この鍵では、消す・招待する・鍵を作るはできません（漏れたときに困らないように。それらはこの画面で）。</div>
+      <div class="small muted">この鍵では、消す・招待する・鍵を作ることはできません（漏れたときに困らないように。それらはこの画面で）。</div>
       ${me!.site?.can_create && me!.site?.invite_only && !LIGHT(me!.site) ? `<label class="small hstack" style="gap:8px"><input type="checkbox" id="tkAdmin" style="width:auto">持ち主用の鍵にする（編集スキルを配る editor-publish 用。画面と同じことができるので、Claude Code・Codex には入れない）</label>` : ""}
       <div id="tkOut"></div><div id="tkList" class="list"></div></div>
     ${me!.site?.can_create !== false || me!.usage.channels ? `<h2>容量</h2><div class="glass card stack" id="usage">${usageCard(me!.usage)}</div>` : ""}
@@ -355,24 +355,29 @@ async function pageSettings() {
       drawTokens();
       return;
     }
-    const cmd = `claude mcp add --transport http miru ${mcpUrl} --header "Authorization: Bearer ${r.token}"`;
-    // Codex は設定ファイル（~/.codex/config.toml）に鍵のヘッダーを書く。環境変数が要らないので、アプリ版の Codex でも読める
-    const codexMac = `mkdir -p ~/.codex && printf '\\n[mcp_servers.miru]\\nurl = "${mcpUrl}"\\nhttp_headers = { Authorization = "Bearer ${r.token}" }\\n' >> ~/.codex/config.toml`;
-    const codexWin = `Add-Content $HOME\\.codex\\config.toml "\`n[mcp_servers.miru]\`nurl = \`"${mcpUrl}\`"\`nhttp_headers = { Authorization = \`"Bearer ${r.token}\`" }"`;
-    const inl = (t: string) => `<span class="code" style="display:inline;padding:1px 6px">${t}</span>`;
+    // Claude Code: どのフォルダーから開いても使えるように -s user（無いと、そのとき開いていたフォルダーだけになる）
+    const cmd = `claude mcp add -s user --transport http miru ${mcpUrl} --header "Authorization: Bearer ${r.token}"`;
+    // Codex は設定ファイル（~/.codex/config.toml）に鍵のヘッダーを書く。前の [mcp_servers.miru] は消してから足す（鍵を作り直したときに重ならないように）
+    const codexMac = `mkdir -p ~/.codex && touch ~/.codex/config.toml && perl -0pi -e 's/\\n*\\[mcp_servers\\.miru\\][^\\[]*//g' ~/.codex/config.toml && printf '\\n[mcp_servers.miru]\\nurl = "${mcpUrl}"\\nhttp_headers = { Authorization = "Bearer ${r.token}" }\\n' >> ~/.codex/config.toml`;
+    const codexWin = `$p = "$HOME\\.codex\\config.toml"; New-Item -Force -ItemType Directory "$HOME\\.codex" | Out-Null; if (Test-Path $p) { ((Get-Content $p -Raw) -replace '(?s)(\\r?\\n)*\\[mcp_servers\\.miru\\][^\\[]*', '') | Set-Content -Path $p -NoNewline }; Add-Content $p "\`n[mcp_servers.miru]\`nurl = \`"${mcpUrl}\`"\`nhttp_headers = { Authorization = \`"Bearer ${r.token}\`" }"`;
+    // 上げる道具（miru_sync.py）: 鍵とこのサイトの場所をファイルに置く。鍵を入れたまま 1 本のコマンドにする
+    // （前は「鍵だけコピー」のあとにコマンドをコピーして貼る案内で、そのとき鍵がコマンドの文字に上書きされていた）
     const site = location.origin;
-    $("#tkOut")!.innerHTML = `<div class="small"><b>Claude Code</b></div><div class="code">${esc(cmd)}</div>
-      <div class="hstack" style="margin-top:8px"><button class="btn sm" id="tkCopy">コマンドをコピー</button><button class="btn sm" id="tkKey">鍵だけコピー</button></div>
-      <div class="small" style="margin-top:12px"><b>Codex</b>（Mac はターミナル、Windows は PowerShell に貼る。Codex を開き直すとつながります）</div>
+    const syncMac = `mkdir -p ~/.config/miru && printf '%s\\n' '${r.token}' > ~/.config/miru/token && chmod 600 ~/.config/miru/token && printf '%s\\n' '${site}' > ~/.config/miru/url`;
+    const syncWin = `New-Item -Force -ItemType Directory "$HOME\\.config\\miru" | Out-Null; [IO.File]::WriteAllText("$HOME\\.config\\miru\\token", '${r.token}'); [IO.File]::WriteAllText("$HOME\\.config\\miru\\url", '${site}')`;
+    $("#tkOut")!.innerHTML = `<div class="small"><b>Claude Code</b>（ターミナルに貼る。前に miru をつないでいたら、先に <span class="code" style="display:inline;padding:1px 6px">claude mcp remove -s user miru</span>）</div><div class="code">${esc(cmd)}</div>
+      <div class="hstack" style="margin-top:8px"><button class="btn sm" id="tkCopy">コマンドをコピー</button></div>
+      <div class="small" style="margin-top:12px"><b>Codex</b>（Mac はターミナル、Windows は PowerShell に貼る。前の miru の設定は置き換わります。Codex を開き直すとつながります）</div>
       <div class="code">${esc(codexMac)}</div>
       <div class="hstack" style="margin-top:8px"><button class="btn sm" id="tkCodexMac">Mac 用をコピー</button><button class="btn sm" id="tkCodexWin">Windows 用をコピー</button></div>
-      <div class="small muted" style="margin-top:10px">プレビューを上げる道具（miru_sync.py）には、鍵とこのサイトの場所をファイルに置きます。「鍵だけコピー」を押してから、<br>
-      Mac: ターミナルで ${inl(`mkdir -p ~/.config/miru &amp;&amp; pbpaste &gt; ~/.config/miru/token &amp;&amp; echo ${esc(site)} &gt; ~/.config/miru/url`)}<br>
-      Windows: PowerShell で ${inl(`New-Item -Force -ItemType Directory $HOME\\.config\\miru; Get-Clipboard | Set-Content -NoNewline $HOME\\.config\\miru\\token; Set-Content -NoNewline $HOME\\.config\\miru\\url ${esc(site)}`)}</div>`;
-    $("#tkCopy")!.addEventListener("click", async () => { await navigator.clipboard.writeText(cmd); toast("コピーしました"); });
-    $("#tkKey")!.addEventListener("click", async () => { await navigator.clipboard.writeText(r.token); toast("鍵をコピーしました"); });
-    $("#tkCodexMac")!.addEventListener("click", async () => { await navigator.clipboard.writeText(codexMac); toast("Mac 用をコピーしました"); });
-    $("#tkCodexWin")!.addEventListener("click", async () => { await navigator.clipboard.writeText(codexWin); toast("Windows 用をコピーしました"); });
+      <div class="small" style="margin-top:12px"><b>動画を上げる道具</b>（miru_sync.py。鍵とこのサイトの場所をファイルに置きます）</div>
+      <div class="hstack" style="margin-top:8px"><button class="btn sm" id="tkSyncMac">上げる道具用をコピー（Mac）</button><button class="btn sm" id="tkSyncWin">上げる道具用をコピー（Windows）</button></div>`;
+    const copyOf = (id: string, text: string, done: string) => $(id)!.addEventListener("click", async () => { await navigator.clipboard.writeText(text); toast(done); });
+    copyOf("#tkCopy", cmd, "コピーしました。ターミナルに貼ってください");
+    copyOf("#tkCodexMac", codexMac, "Mac 用をコピーしました");
+    copyOf("#tkCodexWin", codexWin, "Windows 用をコピーしました");
+    copyOf("#tkSyncMac", syncMac, "コピーしました。ターミナルに貼ってください");
+    copyOf("#tkSyncWin", syncWin, "コピーしました。PowerShell に貼ってください");
     drawTokens();
   });
   drawTokens().catch(() => {});

@@ -17,7 +17,7 @@ MIRU ライトは、AI動画編集 lite が作った動画のプレビューを�
 |---|---|---|
 | Cloudflare のアカウント（https://dash.cloudflare.com/sign-up） | MIRU を置く場所。作ったら、届いたメールの確認のリンクを押しておく | 無料の範囲で使えます（下の表） |
 | Google アカウント | MIRU にログインする・Google Cloud の設定 | 無料 |
-| Node.js 20 以上（https://nodejs.org の LTS） | セットアップの道具を動かす | 無料 |
+| Node.js 22.12 以上（https://nodejs.org の LTS。20 では途中で止まります） | セットアップの道具を動かす | 無料 |
 | Claude Code か Codex（AI動画編集 lite を入れたもの） | 作業を任せる | — |
 
 ### 無料で使える範囲（2026 年 10 月時点の Cloudflare の公式の値。変わることがあります）
@@ -31,7 +31,7 @@ MIRU ライトは、AI動画編集 lite が作った動画のプレビューを�
 
 30 分の動画で、1 版目がおよそ 1GB、2 版目からは変わった分だけ（数十 MB）増えます。
 **MIRU ライトは、置いた量が 9GB になると新しい版を受け付けません**（R2 の無料の 10GB を超えて請求されないように）。古い版は MIRU の画面で消せます。
-超えた分を払ってよいなら、AI に「MIRU の容量の上限を 30GB にして」などと頼みます（`node tools/setup.mjs quota --gb 30`。R2 は 10GB を超えた分が 1GB あたり月数円）。
+超えた分を払ってよいなら、AI に「MIRU の容量の上限を 30GB にして」などと頼みます（`node ~/MIRU/tools/setup.mjs quota --gb 30`。R2 は 10GB を超えた分が 1GB あたり月数円）。
 最新の値は https://developers.cloudflare.com/r2/pricing/ と https://developers.cloudflare.com/workers/platform/pricing/ で確かめてください。
 
 ---
@@ -45,7 +45,8 @@ AI があなたのメールアドレス（MIRU にログインする Google ア�
 node <MIRU の場所>/tools/setup.mjs start --owner あなたのメール@gmail.com
 ```
 
-自分のターミナルで動かしてもかまいません。MIRU はホームの `MIRU` フォルダー（Mac は `~/MIRU`、Windows は `C:\Users\あなた\MIRU`）に作られます。
+`<MIRU の場所>` は、AI動画編集 lite のプラグインの中の `miru` フォルダーです（AI が探します）。立てた MIRU はホームの `MIRU` フォルダー（Mac は `~/MIRU`、Windows は `C:\Users\あなた\MIRU`）に作られ、このあとのコマンドはそこから動かします。
+このガイドのコマンドは Mac の書き方です。Windows の PowerShell では `~/MIRU/tools/setup.mjs` を `$HOME\MIRU\tools\setup.mjs` に、`npx` を `npx.cmd` に読み替え、`&&` でつながった行は 2 行に分けて動かします。
 
 ### 途中であなたがすること
 
@@ -91,7 +92,7 @@ MIRU は Google アカウントでログインします。そのための「鍵�
 クライアント ID（`…apps.googleusercontent.com`）を AI に伝えると、次を動かします。
 
 ```bash
-node tools/setup.mjs google --client-id 123456-xxxx.apps.googleusercontent.com
+node ~/MIRU/tools/setup.mjs google --client-id 123456-xxxx.apps.googleusercontent.com
 ```
 
 ### シークレットは自分で入れる
@@ -115,7 +116,7 @@ Windows の PowerShell なら `cd $HOME\MIRU` のあとに `npx.cmd wrangler sec
 AI に「MIRU を確かめて」と頼むか、次を動かします。サイト・版・Google の設定・シークレット・この PC とのつながりを 1 つずつ確かめ、直す所があれば「→」で何をすればよいかを言います。
 
 ```bash
-node tools/setup.mjs check
+node ~/MIRU/tools/setup.mjs check
 ```
 
 ---
@@ -126,13 +127,13 @@ node tools/setup.mjs check
 
 「設定」→「Claude Code・Codex とつなぐ」→「鍵を作る」。出てきたコマンドを貼ります。
 
-- **Claude Code**: 1 行目のコマンドをターミナルに貼ります。
-- **Codex**: 「Mac 用をコピー」（Windows は「Windows 用をコピー」）を押して、ターミナル（PowerShell）に貼ります。Codex を開き直すとつながります。
-- **プレビューを上げる道具（miru_sync.py）**: 「鍵だけコピー」を押してから、画面に出ているコマンドをターミナルに貼ります。
+- **Claude Code**: 「コマンドをコピー」を押して、ターミナルに貼ります（どのフォルダーから開いても使えます）。前に miru をつないでいたら、先に `claude mcp remove -s user miru` を動かします。
+- **Codex**: 「Mac 用をコピー」（Windows は「Windows 用をコピー」）を押して、ターミナル（PowerShell）に貼ります。前の miru の設定は置き換わります。Codex を開き直すとつながります。
+- **動画を上げる道具（miru_sync.py）**: 「上げる道具用をコピー（Mac）」（Windows は「（Windows）」）を押して、ターミナル（PowerShell）に貼ります。
   鍵（`~/.config/miru/token`）と、あなたの MIRU の場所（`~/.config/miru/url`）が置かれます。
 
 鍵は 1 年で切れます。切れたら同じ画面で作り直してください。
-この鍵（作業用）では、消す・招待する・鍵を作るはできません（ファイルに置く鍵が漏れても困らないように）。それらは MIRU の画面でします。
+この鍵（作業用）では、消す・招待する・鍵を作ることはできません（ファイルに置く鍵が漏れても困らないように）。それらは MIRU の画面でします。
 
 ### チャンネルと招待
 
@@ -146,8 +147,8 @@ MIRU からはメールが送られないので、「招待した人に送る案
 
 ## 5. 自分用に直す
 
-MIRU ライトはあなたの Cloudflare で動くあなたのものなので、好きに直せます。AI に「MIRU の〇〇を直して」と頼むと、`~/MIRU` を直して `node tools/setup.mjs deploy` で公開し直します（型の確認で止まったら公開しません）。
-直したファイルは `node tools/setup.mjs changes` で見られます。**新しい版にしても、直した所は残ります**（くわしくは `~/MIRU/README.md` の「自分用に直す」）。
+MIRU ライトはあなたの Cloudflare で動くあなたのものなので、好きに直せます。AI に「MIRU の〇〇を直して」と頼むと、`~/MIRU` を直して `node ~/MIRU/tools/setup.mjs deploy` で公開し直します（型の確認で止まったら公開しません）。
+直したファイルは `node ~/MIRU/tools/setup.mjs changes` で見られます。**新しい版にしても、直した所は残ります**（くわしくは `~/MIRU/README.md` の「自分用に直す」）。
 
 AI動画編集 lite（編集のスキル）を自分用に直したいときは:
 - 作風（字幕・強調の見た目・カットの詰め方・続けるルール）は、AI に言えば覚え直します（「強調は 1 分に 1 個まで」など）。これは `~/.ai-video-editing-lite/` に残り、lite を更新しても消えません。
@@ -157,21 +158,21 @@ AI動画編集 lite（編集のスキル）を自分用に直したいときは:
 
 ## 6. 新しい版にする
 
-MIRU の「設定」→「この MIRU」に、新しい版があると出ます。AI に「AI動画編集 lite と MIRU を新しい版にして」と頼むと、lite を更新してから次を動かします。データと設定はそのままで、更新の前に文字のデータの控えを `~/MIRU/backups/` に取ります。
+MIRU の「設定」→「この MIRU」に、新しい版があると出ます。AI に「AI動画編集 lite と MIRU を新しい版にして」と頼むと、lite を更新してから次を動かします。データと設定はそのままです。表（データベース）を足すときは、その前に文字のデータの控えを `~/MIRU/backups/` に取ります（取れなければ止まります）。lite が今入っている MIRU より古いときは、入れ替えずに止まります。
 
 ```bash
 node <新しい MIRU の場所>/tools/setup.mjs update
 ```
 
-自分で直した所と新しい版が同じ所を変えていたときだけ、公開せずに止まり、どのファイルかを言います。AI が両方の変更を入れてから `node tools/setup.mjs deploy --resolved` で続けます。
+自分で直した所と新しい版が同じ所を変えていたときだけ、公開せずに止まり、どのファイルかを言います。AI が両方の変更を入れてから `node ~/MIRU/tools/setup.mjs deploy --resolved` で続けます。
 
-いまの様子（URL・版・Google の設定・シークレットの有無・直したファイルの数）は `node tools/setup.mjs status` で見られます。
+いまの様子（URL・版・Google の設定・シークレットの有無・直したファイルの数）は `node ~/MIRU/tools/setup.mjs status` で見られます。
 
 ---
 
 ## 困ったとき
 
-まず `node tools/setup.mjs check` を動かし、出た「→」のとおりにします。よくあるもの:
+まず `node ~/MIRU/tools/setup.mjs check` を動かし、出た「→」のとおりにします。よくあるもの:
 
 | 出たこと | すること |
 |---|---|
@@ -179,21 +180,24 @@ node <新しい MIRU の場所>/tools/setup.mjs update
 | 「サイトのアドレスの一部になる名前がまだ決まっていません」 | 出たリンク（…/workers/onboarding）で workers.dev の名前を登録してから、同じコマンドをもう一度 |
 | 「Cloudflare のアカウントが複数あります」 | 出た一覧から使う ID を選び、`--account <ID>` を付けて同じコマンドをもう一度 |
 | 「Cloudflare のメールアドレスの確認がまだです」 | Cloudflare から届いたメールの確認のリンクを押してから、同じコマンドをもう一度 |
-| 「もう『miru』という名前の D1 があります」 | 前に立てた MIRU を使い直すなら `--reuse`、別に立てるなら `--name 別の名前` |
+| 「もう〜があります（この道具が作ったものではありません）」 | 前に立てた MIRU の D1・R2・Worker を使い直すなら `--reuse`、別に立てるなら `--name 別の名前`（公開の前なら名前を変えてやり直せます） |
+| 「Node.js 22.12 以上が要ります」 | https://nodejs.org から LTS を入れ、ターミナルを開き直してから、同じコマンドをもう一度 |
+| 「入れようとしている MIRU は、いま入っているものより古いです」 | AI動画編集 lite を新しくしてから update します（Claude Code と Codex で lite を別々に入れているときに起こります） |
+| 「前の update でぶつかったファイルがまだあります」 | ぶつかったファイルに新しい版の変更を入れてから `deploy --resolved`（AI に頼めます）。直し終えるまで update はできません |
 | 「ログインはまだ用意されていません」 | 「2. Google でログインできるようにする」がまだです。クライアント ID とシークレットを入れてください |
 | Google の画面で「redirect_uri_mismatch」 | Google Cloud のクライアントの「リダイレクト URI」が `https://…workers.dev/auth/callback` と一字一句同じか（最後に `/` が無いか）確かめます |
 | Google の画面で「アクセスをブロック」・「このアプリは Google で確認されていません」 | 「対象」で「アプリを公開」して本番環境にします（テストのままだとテストユーザーしか入れません） |
-| 「招待されていません」と出て入れない | `--owner` に入れたメールと、ログインしたアカウントが違います。`node tools/setup.mjs status` で持ち主を確かめ、違えば `start --owner 正しいメール` を動かし直します |
+| 「招待されていません」と出て入れない | `--owner` に入れたメールと、ログインしたアカウントが違います。`node ~/MIRU/tools/setup.mjs status` で持ち主を確かめ、違えば `start --owner 正しいメール` を動かし直します |
 | 招待した人が入れない | 相手が、招待したメールアドレスの Google アカウントでログインしているか確かめます。Gmail は点の有無が違っても同じ人として入れます |
-| 「容量の上限（9.0GB）を超えます」 | 古い版を消して空けます。超えた分を払ってよいなら `node tools/setup.mjs quota --gb 30` など |
+| 「容量の上限（9.0GB）を超えます」 | 古い版を消して空けます。超えた分を払ってよいなら `node ~/MIRU/tools/setup.mjs quota --gb 30` など |
 | PowerShell で「このシステムではスクリプトの実行が無効」 | `npx` の代わりに `npx.cmd` を使います（`npx.cmd wrangler secret put GOOGLE_CLIENT_SECRET`） |
-| 修正指示の「AI で整える」が働かない | Workers AI の無料の範囲を超えたか、使っている型が有料プラン向けです。文はそのまま残るので、修正には困りません |
+| 修正指示の「AI で整える」が働かない | Workers AI の無料の範囲を超えたか、使っている AI のモデルが有料プラン向けです。文はそのまま残るので、修正には困りません |
 
-直らないときは、GitHub の Issues（https://github.com/fuuuuuuma/ai-video-editing-lite/issues）に、`node tools/setup.mjs check` の結果と、何をしたら何が出たかを書いてください。**シークレットや鍵（`GOCSPX-`・`miru_` で始まる値）は貼らないでください。**
+直らないときは、GitHub の Issues（https://github.com/fuuuuuuma/ai-video-editing-lite/issues）に、`node ~/MIRU/tools/setup.mjs check` の結果と、何をしたら何が出たかを書いてください。**シークレットや鍵（`GOCSPX-`・`miru_` で始まる値）は貼らないでください。**
 
 ## やめる
 
-1. 控えを取る: `node tools/setup.mjs backup`（文字のデータ。動画は手元の案件フォルダーに元があります）
+1. 控えを取る: `node ~/MIRU/tools/setup.mjs backup`（文字のデータ。動画は手元の案件フォルダーに元があります）
 2. Cloudflare のダッシュボードで、Workers & Pages の `miru`、D1 の `miru`、R2 の `miru-media` を消します。
    R2 は中が空でないと消せません。ファイルが多いときは、バケットの「設定」→「オブジェクトのライフサイクル ルール」で 1 日で消すルールを足し、翌日に消します。
 3. Google Cloud の MIRU のプロジェクトを消し、`~/MIRU` と `~/.config/miru` を消します。
