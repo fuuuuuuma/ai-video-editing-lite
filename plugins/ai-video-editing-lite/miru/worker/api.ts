@@ -13,6 +13,7 @@
 import { claimInvites, currentUser, emailKey, isSiteOwner, json, mayEnter, random, siteOwners, sha256, TOKEN_DAYS, TOKEN_PREFIX, writable, type Who } from "./auth";
 import { hookKind, notify, type Waiter } from "./notify";
 import { activityOf, record } from "./activity";
+import { cleanDrawing, drawingHint } from "./drawing";
 import { exec, many, one, type D1Database } from "./db";
 import { editionOf, VERSION } from "./version";
 
@@ -189,6 +190,7 @@ export function workTokenMay(m: string, seg: string[]): boolean {
   if (seg[1] === "editor" && m === "PUT") return false;
   if (seg[1] === "channels" && seg[3] === "notify" && m !== "GET") return false;     // 通知の送り先を変える・試しに送る（2026-10-24）
   if (seg[1] === "videos" && seg[3] === "versions" && seg[5] === "approve") return false;   // 承認は人が画面で出す
+  if (seg[1] === "videos" && seg[3] === "activity" && seg[5] === "restore") return false;   // 消した指示を戻すのも人が画面で（2026-10-25 の点検: 管理者が消した指示を鍵で戻せた）
   return true;
 }
 /** 画面での手直しの 1 件として受け取れるか。確認画面は op やコマを HTML に入れるので、形の決まった所は形を確かめる（2026-10-23） */
@@ -1027,8 +1029,14 @@ async function route(req: Request, env: Env, url: URL, p: string, ctx?: Waiter):
         if (same) id = "n" + newId();      // 別の動画の指示とぶつかったら、新しい id にする（どの動画かは教えない）
         const count = await one<{ n: number }>(db, "SELECT count(*) AS n FROM notes WHERE video_id = ?1", v.id);
         if ((count?.n ?? 0) >= 3000) return json({ error: "修正指示は 1 本 3000 件までです" }, 400);
-        const extra = JSON.stringify({ source: b.source ?? null, caption: b.caption ?? null, ...(typeof b.replacement === "string" ? { replacement: b.replacement.slice(0, 400) } : {}) });
-        if (extra.length > 6000) return json({ error: "大きすぎます" }, 413);
+        // 確認画面で描いた線（compare.ts）は、形を確かめてから一緒に残す（2026-10-25）
+        // null は「線なし」（2026-10-25 の点検: ほかの道具が null を送ると書けなかった）
+        const drawing = b.drawing === undefined || b.drawing === null ? null : cleanDrawing(b.drawing);
+        if (b.drawing !== undefined && b.drawing !== null && !drawing) return json({ error: "描いた線の形が違います" }, 400);
+        // 線の無い部分は前と同じ 6000 字で数え、線は cleanDrawing の上限（5000 字ほど）で別に抑える（2026-10-25 の点検: 線の無い指示でも 12000 字まで通った）
+        const rest = { source: b.source ?? null, caption: b.caption ?? null, ...(typeof b.replacement === "string" ? { replacement: b.replacement.slice(0, 400) } : {}) };
+        if (JSON.stringify(rest).length > 6000) return json({ error: "大きすぎます" }, 413);
+        const extra = JSON.stringify({ ...rest, ...(drawing ? { drawing } : {}) });
         const t = now();
         await exec(db, "INSERT INTO notes (id, video_id, version, author, frame, end_frame, tc, end_tc, text, status, category, extra, created_at, updated_at) " +
           "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'open', ?10, ?11, ?12, ?12)",
@@ -1103,7 +1111,8 @@ async function route(req: Request, env: Env, url: URL, p: string, ctx?: Waiter):
       "SELECT n.*, v.title AS video_title, v.channel_id, m.role AS my_role, (SELECT name FROM users WHERE email = n.author ORDER BY created_at LIMIT 1) AS author_name " +
       "FROM notes n JOIN videos v ON v.id = n.video_id JOIN members m ON m.channel_id = v.channel_id AND m.email = ?1 " +
       "ORDER BY n.updated_at DESC LIMIT 500", who.email.toLowerCase());
-    return json({ notes: rows.map(({ extra, my_role, ...n }) => ({ ...n, author: personOf(n.author as string, n.author_name as string | null, my_role === "owner"), ...safeParse(extra) })) });
+    // タスクの一覧には描いた線を入れない（500 件分の線で重くなる。2026-10-25 の点検）
+    return json({ notes: rows.map(({ extra, my_role, ...n }) => { const { drawing: _d, ...x } = safeParse(extra); return { ...n, author: personOf(n.author as string, n.author_name as string | null, my_role === "owner"), ...x }; }) });
   }
 
   // ── AI（Workers AI）: 音声入力の指示を読みやすく・種類を付ける／入力の候補 ──
@@ -1172,7 +1181,7 @@ const nameOf = async (db: D1Database, email: string | null) =>
 const notesOf = async (db: D1Database, vid: string, owner: boolean) =>
   (await many<Record<string, unknown> & { extra: string; author: string; author_name: string | null }>(db,
     "SELECT n.*, (SELECT name FROM users WHERE email = n.author ORDER BY created_at LIMIT 1) AS author_name FROM notes n WHERE n.video_id = ?1 ORDER BY coalesce(n.frame, 0), n.created_at", vid))
-    .map(({ extra, ...n }) => ({ ...n, author: personOf(n.author, n.author_name, owner), ...safeParse(extra) }));
+    .map(({ extra, ...n }) => { const x = safeParse(extra); return { ...n, author: personOf(n.author, n.author_name, owner), ...x, ...(x.drawing ? { drawing_hint: drawingHint(x.drawing) } : {}) }; });
 const openNotes = async (db: D1Database, vid: string) => (await one<{ n: number }>(db, "SELECT count(*) AS n FROM notes WHERE video_id = ?1 AND status != 'done'", vid))?.n ?? 0;
 const safeParse = (s: string) => { try { return JSON.parse(s) as Record<string, unknown>; } catch { return {}; } };
 

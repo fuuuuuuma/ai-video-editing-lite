@@ -11,6 +11,7 @@ import { PlanMixer, type AudioIndex, type MixPlan } from "./mixer";
 import { renderCaption, type CaptionStyle } from "./caption";
 import { mark, startDiag } from "./diag";
 import { mergeEdits, planNoteSync, stampOf } from "./notesync";
+import { attachDrawings, startCompare } from "./compare";
 
 declare global { interface Window { MIRU_MEDIA?: string; MIRU_CLOUD?: number; __miruStart?: () => void; Audio: typeof Audio } }
 
@@ -118,6 +119,8 @@ async function boot() {
   async function saveComments(doc: Json) {
     await loadComments();                                   // 比べる相手はいまのサイト
     const { post, patch, del } = planNoteSync(doc.items ?? [], doc.saved_at, known);
+    // 描いた線は、描いた場面で書いた指示にだけ付ける。前に付けた線は id で覚えていて、やり直しや送り直しでも付く（compare.ts）
+    attachDrawings(post, ver);
     for (const it of post) await api(`/api/videos/${enc(vid)}/notes`, { method: "POST", json: { ...it, version: it.preview ?? ver } });
     for (const it of patch) {
       const n = known.get(it.id)!;
@@ -254,6 +257,7 @@ async function boot() {
   window.__miruStart?.();
   startDiag(vid);
   prefetchImages(manifest, base, ver);
+  startCompare(vid, ver, ready.map((x) => x.name), role !== "viewer");
 }
 let bootCuts: Json | null = null, bootCaps: Json | null = null;
 let bootNotes: Promise<Json | null> | null = null;

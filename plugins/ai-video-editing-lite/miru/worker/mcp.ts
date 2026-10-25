@@ -26,7 +26,9 @@ export const TOOLS: Tool[] = [
   { name: "get_review", description: "動画の確認状況: 版の一覧（いちばん新しい見られる版に approved_by・approved_at があり、そのあとの未対応の修正指示が無ければ承認済み＝完成版を作ってよい。古い版の承認は、その後に直した版があれば済んだもの）・修正指示（全部）・画面での手直しの件数。次の版を作る前に読む", inputSchema: obj({ video: str("動画の名前") }, ["video"]),
     async run(a, call, origin) {
       const v = await call("GET", `/api/videos/${enc(a.video)}`) as Record<string, unknown>;
-      const notes = await call("GET", `/api/videos/${enc(a.video)}/notes`);
+      // 描いた線は数字の並びでなく、言葉（drawing_hint）で渡す（2026-10-25 の点検）
+      const raw = await call("GET", `/api/videos/${enc(a.video)}/notes`) as { notes?: Record<string, unknown>[] };
+      const notes = { ...raw, notes: (raw.notes ?? []).map(({ drawing: _d, ...n }) => n) };
       const cap = await call("GET", `/api/videos/${enc(a.video)}/edits/caption`) as { items?: unknown[] };
       const cut = await call("GET", `/api/videos/${enc(a.video)}/edits/cut`) as { items?: unknown[] };
       return { ...v, notes, edits: { caption: cap.items?.length ?? 0, cut: cut.items?.length ?? 0 }, link: `${origin}/v/${enc(a.video)}` };
