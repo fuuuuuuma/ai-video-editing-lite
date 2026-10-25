@@ -11,6 +11,7 @@
 // 動画・画像・音は R2（v/<動画>/<版>/<鍵>）、文字のデータは D1。毎日の掃除は cleanup()（index.ts の scheduled）。
 
 import { claimInvites, currentUser, emailKey, isSiteOwner, json, mayEnter, random, siteOwners, sha256, TOKEN_DAYS, TOKEN_PREFIX, writable, type Who } from "./auth";
+import { hookKind, notify, type Waiter } from "./notify";
 import { exec, many, one, type D1Database } from "./db";
 import { editionOf, VERSION } from "./version";
 
@@ -83,6 +84,9 @@ export async function roleIn(env: Env, who: Who, channelId: string): Promise<Rol
 
 type Video = { id: string; channel_id: string; title: string; status: string; thumb: string | null; created_at: number; updated_at: number };
 const videoOf = (db: D1Database, id: string) => one<Video>(db, "SELECT * FROM videos WHERE id = ?1", id);
+/** 動画と、その人のチャンネルでの役割を 1 回の問い合わせで（データベースの往復 1 回 ≒ 0.1〜0.25 秒。2026-10-24 の実測） */
+const videoWithRole = (db: D1Database, id: string, who: Who) => one<Video & { role: Role | null }>(db,
+  "SELECT v.*, m.role AS role FROM videos v LEFT JOIN members m ON m.channel_id = v.channel_id AND m.email = ?2 WHERE v.id = ?1", id, who.email.toLowerCase());
 
 /** 容量: チャンネルを作った人ごとに、その人のチャンネルの版（上げ途中も含む）・共有置き場・分割アップロードの途中の合計 */
 export async function usageOf(env: Env, email: string) {
@@ -178,6 +182,8 @@ export function workTokenMay(m: string, seg: string[]): boolean {
   if (seg[1] === "tokens") return false;
   if (seg[1] === "channels" && seg[3] === "members" && m !== "GET") return false;
   if (seg[1] === "editor" && m === "PUT") return false;
+  if (seg[1] === "channels" && seg[3] === "notify" && m !== "GET") return false;     // 通知の送り先を変える・試しに送る（2026-10-24）
+  if (seg[1] === "videos" && seg[3] === "versions" && seg[5] === "approve") return false;   // 承認は人が画面で出す
   return true;
 }
 /** 画面での手直しの 1 件として受け取れるか。確認画面は op やコマを HTML に入れるので、形の決まった所は形を確かめる（2026-10-23） */
@@ -187,8 +193,55 @@ function editItemOk(x: Record<string, unknown>): boolean {
   return EDIT_NUMS.every((k) => x[k] === undefined || x[k] === null || (typeof x[k] === "number" && Number.isFinite(x[k])));
 }
 
+/** 再生の記録の上限（2026-10-24 の点検: 見るだけの人でも 1MB を回数の上限なく置けた）。
+ *  見る人の再生を集めるためのものなので持ち主の容量には数えず、ここで抑える */
+export const DIAG = { bytes: 256 * 1024, keep: 100, total: 20 * 1024 * 1024, gapMs: 10_000, days: 14 };
+/** ライトは持ち主の容量（既定 9GB）を R2 の無料の 10GB に収めているので、数えない記録は小さく抑える（動画ごとに 20 件・2MB。2026-10-25） */
+export const diagLimit = (env: Env) => (editionOf(env) === "light" ? { ...DIAG, keep: 20, total: 2 * 1024 * 1024 } : DIAG);
+/** 再生の記録の置き場（時刻順＝名前の昇順）。cursor をたどって全部 */
+async function diagKeys(env: Env, vid: string): Promise<{ key: string; size: number; uploaded: number }[]> {
+  const out: { key: string; size: number; uploaded: number }[] = [];
+  let cursor: string | undefined;
+  do {
+    const r = await env.MEDIA.list({ prefix: `v/${vid}/diag/`, cursor, limit: 1000 });
+    for (const o of r.objects) out.push({ key: o.key, size: o.size, uploaded: diagTime(o.key) });
+    cursor = r.truncated ? r.cursor : undefined;
+  } while (cursor);
+  return out.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+}
+/** 記録の名前の頭の時刻（2026-10-23T12-44-18-217Z-…）。読めなければ 0 */
+export function diagTime(key: string): number {
+  const m = /(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/.exec(key.split("/").pop() ?? "");
+  return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`) || 0 : 0;
+}
+/** 新しいものから数えて、件数か合計の大きさを超えた古い記録の名前 */
+export function diagOverflow(items: { key: string; size: number }[], lim: { keep: number; total: number } = DIAG): string[] {
+  let n = 0, bytes = 0;
+  const drop: string[] = [];
+  for (let i = items.length - 1; i >= 0; i--) {
+    n++; bytes += items[i].size;
+    if (n > lim.keep || bytes > lim.total) drop.push(items[i].key);
+  }
+  return drop;
+}
+/** 送った人の印（メールは名前に入れない） */
+async function diagTag(email: string): Promise<string> {
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(email.toLowerCase())));
+  return "u" + [...h.slice(0, 4)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+/** 毎日の掃除: DIAG.days より前の再生の記録を消す */
+export async function sweepDiag(env: Env, t = Date.now()): Promise<number> {
+  let n = 0;
+  for (const v of await many<{ id: string }>(env.DB, "SELECT id FROM videos")) {
+    const old = (await diagKeys(env, v.id)).filter((o) => o.uploaded && o.uploaded < t - DIAG.days * DAY).map((o) => o.key);
+    for (let i = 0; i < old.length; i += 1000) await env.MEDIA.delete(old.slice(i, i + 1000));
+    n += old.length;
+  }
+  return n;
+}
+
 /** /api/* と /m/* の担当。担当でなければ null */
-export async function handleApi(req: Request, env: Env): Promise<Response | null> {
+export async function handleApi(req: Request, env: Env, ctx?: Waiter): Promise<Response | null> {
   const url = new URL(req.url);
   const p = url.pathname;
   if (p.startsWith("/dl/")) return download(env, p.slice(4));    // 使い捨てのリンク（ログイン不要。印そのものが鍵）
@@ -203,7 +256,7 @@ export async function handleApi(req: Request, env: Env): Promise<Response | null
     catch { return json({ ok: false, error: "データベースに届きません", edition: editionOf(env), version: VERSION }, 503, cors); }
   }
   try {
-    return await route(req, env, url, p);
+    return await route(req, env, url, p, ctx);
   } catch (e) {
     if (e instanceof HttpError) return json({ error: e.message }, e.status);
     const id = shortTag(8);
@@ -249,7 +302,7 @@ async function serveMedia(env: Env, req: Request, vid: string, ver: string, path
   return serveObject(env.MEDIA, sha ? `v/${vid}/b/${sha}` : `v/${vid}/${ver}/${path}`, req, mediaHeads);
 }
 
-async function route(req: Request, env: Env, url: URL, p: string): Promise<Response> {
+async function route(req: Request, env: Env, url: URL, p: string, ctx?: Waiter): Promise<Response> {
   const db = env.DB;
   if (p.startsWith("/m/")) {
     const cred = credentialOf(req), seg = p.split("/").filter(Boolean).map(decodeURIComponent);
@@ -276,7 +329,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
   if (m !== "GET" && m !== "HEAD" && !writable(req, who)) return json({ error: "この画面からだけ" }, 403);
   const seg = p.split("/").filter(Boolean).map(decodeURIComponent);   // ["api", ...] / ["m", ...]
   if (who.via === "token" && who.scope !== "admin" && !workTokenMay(m, seg)) {
-    return json({ error: "この鍵ではできません。MIRU の画面から操作してください（作業用の鍵では、消す・招待する・鍵を作る・編集スキルを置くことはできません）" }, 403);
+    return json({ error: "この鍵ではできません。MIRU の画面から操作してください（作業用の鍵では、消す・招待する・鍵を作る・編集スキルを置く・通知の送り先を変える・承認することはできません）" }, 403);
   }
 
   // ── 動画・画像・音（招待された人だけ） ──
@@ -284,8 +337,8 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
     const [, vid, ver, ...rest] = seg;
     const path = rest.join("/");
     if (!vid || !ver || !VER_RE.test(ver) || !PATH_RE.test(path)) return json({ error: "ありません" }, 404);
-    const v = await videoOf(db, vid);
-    if (!v || !(await roleIn(env, who, v.channel_id))) return json({ error: "ありません" }, 404);
+    const v = await videoWithRole(db, vid, who);
+    if (!v || !v.role) return json({ error: "ありません" }, 404);
     const cred = credentialOf(req);
     if (cred) remember(mediaPass, `${cred}|${vid}`, Date.now() + MEDIA_TTL);
     // 版をまたいで共有しているファイルなら、動画ごとの置き場から返す（serveMedia）
@@ -383,6 +436,29 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
       await deletePrefix(env.MEDIA, `c/${cid}/`);
       await exec(db, "DELETE FROM channels WHERE id = ?1", cid);
       return json({ ok: true });
+    }
+
+    // 通知の送り先（Slack・Discord の Incoming Webhook）。管理者だけが見る・変える。送り先そのものは返さない
+    if (seg[3] === "notify") {
+      if (role !== "owner") return json({ error: "管理者だけができます" }, 403);
+      const cur = await one<{ notify_url: string | null }>(db, "SELECT notify_url FROM channels WHERE id = ?1", cid);
+      const shown = () => cur?.notify_url ? { set: true, kind: hookKind(cur.notify_url), tail: cur.notify_url.slice(-4) } : { set: false };
+      if (!seg[4] && m === "GET") return json(shown());
+      if (!seg[4] && m === "PUT") {
+        const b = await readJson<{ url?: string }>(req);
+        const u = String(b.url ?? "").trim();
+        if (u && !hookKind(u)) return json({ error: "Slack か Discord の Incoming Webhook の URL（https://hooks.slack.com/services/… か https://discord.com/api/webhooks/…）を入れてください" }, 400);
+        await exec(db, "UPDATE channels SET notify_url = ?2 WHERE id = ?1", cid, u || null);
+        return json(u ? { set: true, kind: hookKind(u), tail: u.slice(-4) } : { set: false });
+      }
+      if (seg[4] === "test" && m === "POST") {
+        if (!cur?.notify_url) return json({ error: "送り先がまだありません" }, 400);
+        // 相手に断られたら、そう返す（2026-10-25。消されたウェブフックでも「送りました」と出ていた）
+        const r = await notify(db, ctx, cid, "MIRU からの通知の試しです");
+        if (!r.ok) return json({ error: `送れませんでした${r.status ? `（${r.status}）` : ""}。Slack・Discord でウェブフックを作り直し、新しい URL を保存し直してください` }, 502);
+        return json({ ok: true });
+      }
+      return json({ error: "ありません" }, 404);
     }
 
     if (seg[3] === "members") {
@@ -526,15 +602,18 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
 
   // ── 動画 ──
   if (seg[1] === "videos" && seg[2]) {
-    const v = await videoOf(db, seg[2]);
-    const role = v ? await roleIn(env, who, v.channel_id) : null;
+    const v = await videoWithRole(db, seg[2], who);
+    const role = v?.role ?? null;
     if (!v || !role) return json({ error: "ありません" }, 404);      // 無いのと見られないのは同じ答え
     const sub = seg[3];
     const need = (r: Role) => { if (RANK[role] < RANK[r]) throw new HttpError(403, r === "owner" ? "管理者だけができます" : "見るだけの権限です"); };
     const strong = who.via === "cookie" || who.scope === "admin";     // 画面か、持ち主用の鍵（作業用の鍵ではない）
 
     if (!sub) {
-      if (m === "GET") return json({ video: v, role, versions: await versionsOf(db, v.id), openNotes: await openNotes(db, v.id) });
+      if (m === "GET") {       // 版と未対応の数は並べて聞く（往復を 1 回分にする）
+        const [versions, open] = await Promise.all([versionsOf(db, v.id, role === "owner"), openNotes(db, v.id)]);
+        return json({ video: v, role, versions, openNotes: open });
+      }
       if (m === "PATCH") {
         need("editor");
         const b = await readJson<{ title?: string; status?: string }>(req);
@@ -555,7 +634,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
     if (sub === "versions") {
       const ver = seg[4];
       if (!ver) {
-        if (m === "GET") return json({ versions: await versionsOf(db, v.id) });
+        if (m === "GET") return json({ versions: await versionsOf(db, v.id, role === "owner") });
         if (m === "POST") {
           need("editor");
           const b = await readJson<{ name?: string; frames?: number; fps?: number; note?: string; bytes?: number }>(req);
@@ -571,8 +650,10 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
             return json({ error: `${name} はもう上げ終わっています。別の版の名前（${name}-2 など）で上げてください（${how}）` }, 409);
           }
           await needRoom(env, v.channel_id, Math.max(0, Number(b.bytes) || 0));
+          // 上げ直しは作った時刻も今にする（古いままだと、上げている途中に毎日の掃除が「2日たっても上がらない版」として消した。2026-10-24 の点検）
           await exec(db, "INSERT INTO versions (video_id, name, frames, fps, ready, note, created_at) VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6) " +
-            "ON CONFLICT(video_id, name) DO UPDATE SET frames = ?3, fps = ?4, ready = 0, note = ?5, created_at = ?6", v.id, name, frames, fps, String(b.note ?? "").slice(0, 500), now());
+            // 置いた量（bytes）は 0 に戻さない（中のファイルは R2 に残っていて容量を使っている。2026-10-25 の点検）
+            "ON CONFLICT(video_id, name) DO UPDATE SET frames = ?3, fps = ?4, ready = 0, note = ?5, created_at = ?6, approved_by = NULL, approved_at = NULL", v.id, name, frames, fps, String(b.note ?? "").slice(0, 500), now());
           return json({ ok: true });
         }
       }
@@ -584,6 +665,13 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
       const sealed = !!verRow.ready && !(role === "owner" && strong);
       const styleOnly = (path: string) => path === "caption-style.json" || path.startsWith("fonts/");
       const refuseSealed = () => json({ error: `${ver} はもう上げ終わっています。変えるときは別の版の名前で上げてください` }, 409);
+      // 承認のあとに見られる版の中身（字幕の見た目など）を変えたら、承認を外して知らせる（2026-10-25。外さないと、変わる前の OK が残った）
+      const unapprove = async () => {
+        if (!verRow.ready) return;
+        if (!(await exec(db, "UPDATE versions SET approved_by = NULL, approved_at = NULL WHERE video_id = ?1 AND name = ?2 AND approved_at IS NOT NULL", v.id, ver))) return;
+        await exec(db, "UPDATE videos SET status = 'review', updated_at = ?2 WHERE id = ?1 AND status = 'done'", v.id, now());
+        void notify(db, ctx, v.channel_id, `「${v.title}」の ${ver} の中身（字幕の見た目など）が変わったので、承認を外しました ${url.origin}/v/${encodeURIComponent(v.id)}?ver=${encodeURIComponent(ver)}`);
+      };
       const base = `v/${v.id}/${ver}/`;
       const op = seg[5];
       if (op === "files") {                       // 1 つのファイルを置く（95MB まで）
@@ -597,6 +685,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
         await needRoom(env, v.channel_id, len);
         await env.MEDIA.put(base + path, req.body ?? new Uint8Array(), { httpMetadata: { contentType: typeOf(req, path) } });
         await addBytes(db, v.id, ver, len);
+        await unapprove();
         return json({ ok: true, path });
       }
       if (op === "mpu") {                         // 大きいファイルを分けて上げる
@@ -629,6 +718,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
           await env.MEDIA.resumeMultipartUpload(base + path, id).complete(b.parts ?? []);
           await exec(db, "DELETE FROM uploads WHERE id = ?1 AND video_id = ?2", id, v.id);
           await addBytes(db, v.id, ver, (await env.MEDIA.head(base + path))?.size ?? 0);     // できあがった大きさを版に数える
+          await unapprove();
           return json({ ok: true, path });
         }
         if (id && seg[7] === "abort" && m === "POST") {     // 途中でやめた分を R2 から捨てる
@@ -646,7 +736,11 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
         await exec(db, "UPDATE versions SET bytes = ?3 WHERE video_id = ?1 AND name = ?2", v.id, ver, bytes);
         await needRoom(env, v.channel_id, 0);
         await exec(db, "UPDATE versions SET ready = 1, bytes = ?3 WHERE video_id = ?1 AND name = ?2", v.id, ver, bytes);
-        await exec(db, "UPDATE videos SET status = 'review', updated_at = ?2 WHERE id = ?1", v.id, now());
+        // 状態を確認待ちにして知らせるのは、はじめて見られるようになったときだけ（2026-10-25。送り直しで、承認したまま確認待ちに戻り、また通知が飛んだ）
+        if (!verRow.ready) {
+          await exec(db, "UPDATE videos SET status = 'review', updated_at = ?2 WHERE id = ?1", v.id, now());
+          void notify(db, ctx, v.channel_id, `「${v.title}」の ${ver} を見られるようになりました ${url.origin}/v/${encodeURIComponent(v.id)}?ver=${encodeURIComponent(ver)}`);
+        }
         return json({ ok: true, bytes });
       }
       if (op === "links" && m === "POST") {     // 共有の置き場にあるファイルを、この版の道につなぐ。無いものを返す
@@ -660,7 +754,20 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
         const linked = await exec(db, "INSERT OR REPLACE INTO links (video_id, version, path, sha) " +
           `SELECT ?1, ?2, j.value ->> 'path', j.value ->> 'sha' FROM json_each(?3) j WHERE ${has}`, v.id, ver, arr);
         const missing = (await many<{ sha: string }>(db, `SELECT DISTINCT j.value ->> 'sha' AS sha FROM json_each(?2) j WHERE NOT ${has}`, v.id, arr)).map((r) => r.sha);
+        if (linked) await unapprove();
         return json({ ok: true, linked, missing });
+      }
+      // 承認（「この版で OK」）。誰がいつ出したかを残し、動画を完了にする。取り消すと確認待ちに戻す
+      if (op === "approve" && (m === "POST" || m === "DELETE")) {
+        need("editor");
+        const row = await one<{ ready: number }>(db, "SELECT ready FROM versions WHERE video_id = ?1 AND name = ?2", v.id, ver);
+        if (!row?.ready) return json({ error: "まだ見られない版です" }, 400);
+        const t = now(), on = m === "POST";
+        await exec(db, "UPDATE versions SET approved_by = ?3, approved_at = ?4 WHERE video_id = ?1 AND name = ?2", v.id, ver, on ? who.email : null, on ? t : null);
+        await exec(db, "UPDATE videos SET status = ?2, updated_at = ?3 WHERE id = ?1", v.id, on ? "done" : "review", t);
+        void notify(db, ctx, v.channel_id, on ? `${personOf(who.email, who.name, false)} が「${v.title}」の ${ver} を承認しました ${url.origin}/v/${encodeURIComponent(v.id)}?ver=${encodeURIComponent(ver)}`
+          : `${personOf(who.email, who.name, false)} が「${v.title}」の ${ver} の承認を取り消しました`);
+        return json({ ok: true, approved_by: on ? personOf(who.email, who.name, role === "owner") : null, approved_at: on ? t : null });
       }
       if (!op && m === "DELETE") {
         need("owner");
@@ -746,7 +853,9 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
       need("editor");
       const len = Number(req.headers.get("content-length") ?? NaN);
       if (!Number.isFinite(len)) return json({ error: "content-length が要ります" }, 411);
-      if (len > MAX_IMAGE_BYTES) return json({ error: "画像が大きすぎます（10MB まで）" }, 413);
+      // 見出しは容量に数えないので、ライトは 1MB まで（上げる道具の見出しは 640px の JPEG で数十 KB。2026-10-25）
+      const maxThumb = editionOf(env) === "light" ? 1_000_000 : MAX_IMAGE_BYTES;
+      if (len > maxThumb) return json({ error: `画像が大きすぎます（${maxThumb === MAX_IMAGE_BYTES ? "10MB" : "1MB"} まで）` }, 413);
       await env.MEDIA.put(`v/${v.id}/thumb.jpg`, req.body ?? new Uint8Array(), { httpMetadata: { contentType: "image/jpeg" } });
       await exec(db, "UPDATE videos SET thumb = ?2, updated_at = ?3 WHERE id = ?1", v.id, `v/${v.id}/thumb.jpg`, now());
       return json({ ok: true });
@@ -759,18 +868,26 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
       const name = seg[4];
       if (!name && m === "POST") {
         const len = Number(req.headers.get("content-length") ?? 0);
-        if (len > 1_000_000) return json({ error: "記録は 1MB までです" }, 413);
+        if (len > DIAG.bytes) return json({ error: "記録は 256KB までです" }, 413);
         const body = await req.text();
-        if (body.length > 1_000_000) return json({ error: "記録は 1MB までです" }, 413);
+        const size = new TextEncoder().encode(body).length;
+        if (size > DIAG.bytes) return json({ error: "記録は 256KB までです" }, 413);
         try { JSON.parse(body); } catch { return json({ error: "JSON ではありません" }, 400); }
-        const key = `${new Date().toISOString().replace(/[:.]/g, "-")}-${newId().slice(0, 6)}.json`;
+        const tag = await diagTag(who.email);
+        const all = await diagKeys(env, v.id);
+        const mine = all.filter((o) => o.key.includes(`-${tag}-`)).pop();       // 同じ人は同じ動画に 10 秒に 1 回まで
+        if (mine && mine.uploaded > Date.now() - DIAG.gapMs) return json({ error: "少し待ってから送ってください" }, 429);
+        const key = `${new Date().toISOString().replace(/[:.]/g, "-")}-${tag}-${newId().slice(0, 6)}.json`;
         await env.MEDIA.put(`v/${v.id}/diag/${key}`, body, { httpMetadata: { contentType: "application/json" } });
+        // 動画ごとに新しい keep 件・合計 total まで残し、古いものから消す（ライトは小さく）。名前は時刻順
+        const drop = diagOverflow([...all, { key: `v/${v.id}/diag/${key}`, size, uploaded: Date.now() }], diagLimit(env));
+        if (drop.length) await env.MEDIA.delete(drop);
         return json({ ok: true, name: key });
       }
       need("editor");
-      if (!name && m === "GET") {
-        const r = await env.MEDIA.list({ prefix: `v/${v.id}/diag/` });
-        const items = r.objects.map((o) => ({ name: o.key.split("/").pop(), size: o.size })).sort((a, b) => (a.name! < b.name! ? 1 : -1)).slice(0, 100);
+      if (!name && m === "GET") {      // 新しい順に 100 件（list は名前の昇順で 1000 件ずつなので、全部たどってから並べる）
+        const all = await diagKeys(env, v.id);
+        const items = all.slice(-100).reverse().map((o) => ({ name: o.key.split("/").pop(), size: o.size, at: o.uploaded }));
         return json({ items });
       }
       if (name && m === "GET" && /^[\w.-]{10,80}\.json$/.test(name)) return serveObject(env.MEDIA, `v/${v.id}/diag/${name}`, req);
@@ -800,6 +917,7 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
           id, v.id, String(b.version ?? "").slice(0, 30), who.email, numOrNull(b.frame), numOrNull(b.end_frame), strOrNull(b.tc), strOrNull(b.end_tc),
           text, String(b.category ?? "").slice(0, 20), extra, t);
         await exec(db, "UPDATE videos SET status = 'fixing', updated_at = ?2 WHERE id = ?1 AND status IN ('review', 'done')", v.id, t);
+        void notify(db, ctx, v.channel_id, `${personOf(who.email, who.name, false)} が修正指示を書きました（「${v.title}」${b.version ? " " + String(b.version).slice(0, 30) : ""}${b.tc ? " " + String(b.tc).slice(0, 20) : ""}）\n${text.slice(0, 300)}\n${url.origin}/v/${encodeURIComponent(v.id)}`);
         return json({ ok: true, id, notes: await notesOf(db, v.id, role === "owner") });
       }
       if (nid && m === "PATCH") {
@@ -813,6 +931,9 @@ async function route(req: Request, env: Env, url: URL, p: string): Promise<Respo
         const reply = b.reply === undefined ? n.reply : String(b.reply).slice(0, 4000);
         const category = b.category === undefined ? n.category : String(b.category).slice(0, 20);
         await exec(db, "UPDATE notes SET status = ?2, text = ?3, reply = ?4, category = ?5, updated_at = ?6 WHERE id = ?1", nid, status, text, reply, category, now());
+        if ((reply && reply !== n.reply) || (status === "done" && n.status !== "done")) {      // 返事・済は書いた人へ知らせる
+          void notify(db, ctx, v.channel_id, `${personOf(who.email, who.name, false)} が修正指示に${reply && reply !== n.reply ? "返事しました" : "「済」を付けました"}（「${v.title}」）\n指示: ${n.text.slice(0, 120)}${reply && reply !== n.reply ? `\n返事: ${reply.slice(0, 300)}` : ""}\n${url.origin}/v/${encodeURIComponent(v.id)}`);
+        }
         return json({ ok: true, notes: await notesOf(db, v.id, role === "owner") });
       }
       if (nid && m === "DELETE") {
@@ -913,8 +1034,11 @@ const members = (db: D1Database, cid: string) =>
 const videosOf = (db: D1Database, cid: string) =>
   many(db, "SELECT v.*, (SELECT name FROM versions WHERE video_id = v.id AND ready = 1 ORDER BY created_at DESC LIMIT 1) AS latest, " +
     "(SELECT count(*) FROM notes WHERE video_id = v.id AND status != 'done') AS open FROM videos v WHERE v.channel_id = ?1 ORDER BY v.updated_at DESC", cid);
-const versionsOf = (db: D1Database, vid: string) =>
-  many(db, "SELECT name, frames, fps, ready, bytes, note, created_at FROM versions WHERE video_id = ?1 ORDER BY created_at DESC", vid);
+const versionsOf = async (db: D1Database, vid: string, owner: boolean) =>
+  (await many<Record<string, unknown> & { approved_by: string | null; approver_name: string | null }>(db,
+    "SELECT s.name, s.frames, s.fps, s.ready, s.bytes, s.note, s.created_at, s.approved_by, s.approved_at, " +
+    "(SELECT name FROM users WHERE email = s.approved_by ORDER BY created_at LIMIT 1) AS approver_name FROM versions s WHERE s.video_id = ?1 ORDER BY s.created_at DESC", vid))
+    .map(({ approver_name, ...r }) => ({ ...r, approved_by: personOf(r.approved_by, approver_name, owner) }));
 /** 人のメールは管理者だけに見せる（2026-10-24 セキュリティ確認）。ほかの人には Google の名前（無ければ「チャンネルの人」）。
  *  招待した人の一覧（members）は前から管理者だけ。修正指示を書いた人・デザインを決めた人・トンマナを直した人も同じにする */
 export const personOf = (email: string | null | undefined, name: string | null | undefined, owner: boolean) =>

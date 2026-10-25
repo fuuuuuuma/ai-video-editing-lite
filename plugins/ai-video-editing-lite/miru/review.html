@@ -1257,8 +1257,13 @@ function setSave(state, text){ const s=$('#saveState'); s.className='pill'+(stat
 let saveTimer=null;
 function save(){ record('comments'); setSave('saving','保存中'); clearTimeout(saveTimer); saveTimer=setTimeout(async()=>{
   try{ const r=await fetch('/api/comments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(comments)}); if(!r.ok) throw new Error(await r.text());
-    const d=await r.json(); comments.saved_at=d.saved_at; setSave('','保存済み '+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})); }
-  catch(e){ setSave('error','保存できませんでした'); toast('保存できませんでした：'+e.message); } },250); }
+    const d=await r.json(); comments.saved_at=d.saved_at;
+    // the server's list after the save (others' new notes and replies included) becomes the page's list again; before
+    // 2026-10-24 the timer was never cleared, so the page stopped taking others' notes after its first save
+    if(Array.isArray(d.items) && !(document.activeElement && ['TEXTAREA','INPUT'].includes(document.activeElement.tagName))){ comments=d; comments.items=comments.items||[]; remember('comments'); renderList(); }
+    setSave('','保存済み '+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})); }
+  catch(e){ setSave('error','保存できませんでした'); toast('保存できませんでした：'+e.message); }
+  finally{ saveTimer=null; } },250); }
 const itemKey=it=>it.id||it.created;
 const findItem=id=>comments.items.find(x=>itemKey(x)===id);
 const itemEls=new Map(); let firstList=true;
@@ -2033,14 +2038,20 @@ async function init(){
     addEventListener('resize',fitLayout); fitLayout(); setupFolds(); }
   new ResizeObserver(()=>{ tlDirty=true; }).observe($('#timeline'));
   // refresh notes written by the agent (status/reply) without reloading
-  setInterval(async()=>{ if(document.activeElement && ['TEXTAREA','INPUT'].includes(document.activeElement.tagName)) return;
+  // the watch for others' changes: not while the tab is hidden, only every 30 s while playing (each round is 4 requests
+  // that compete with the picture and the sound; 2026-10-24), and at once when the tab comes back
+  let pollAt=0;
+  const poll=async()=>{ if(document.hidden) return; if(!audio.paused && performance.now()-pollAt<30000) return; pollAt=performance.now();
+    if(document.activeElement && ['TEXTAREA','INPUT'].includes(document.activeElement.tagName)) return;
     try{ const d=await fetch('/api/comments').then(r=>r.json()); if(d.saved_at && d.saved_at!==comments.saved_at && !saveTimer){ comments=d; comments.items=comments.items||[]; remember('comments'); renderList(); } }catch{}
     if(editsOK && !activeEditor && !editsBusy) try{ const d=await fetch('/api/caption-edits').then(r=>r.json()); if(d.saved_at && d.saved_at!==edits.saved_at){ edits=d; edits.items=edits.items||[]; remember('edits'); rebuildCaps(); } }catch{}
     if(cutsOK && !busy) try{ const d=await fetch('/api/cut-edits').then(r=>r.json()); if(d.saved_at && d.saved_at!==cuts.saved_at){ cuts=d; cuts.items=cuts.items||[];
       remember('cuts'); const m=await fetch('/api/manifest').then(r=>r.json()); if((m.cut_rev||'')!==(M.cut_rev||'')) await applyManifest(m,{}); renderEdits(); } }catch{}
     try{ const m=await fetch('/api/previews').then(r=>r.json()); const nv=m.previews.filter(p=>!M.previews.includes(p));
       if(nv.length){ const b=$('#newVer'); b.textContent=`新しいプレビュー ${nv[nv.length-1]} を開く`; b.style.display='inline-flex';
-        b.onclick=async()=>{ await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv[nv.length-1]})}); location.reload(); }; } }catch{} }, 5000);
+        b.onclick=async()=>{ await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nv[nv.length-1]})}); location.reload(); }; } }catch{} };
+  setInterval(poll, 5000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ pollAt=0; poll(); } });
   updateRange(); seekFrame(+(new URLSearchParams(location.search).get('f'))||0); requestAnimationFrame(loop);
   await waitReady();
   renderList(); hideSkeleton();

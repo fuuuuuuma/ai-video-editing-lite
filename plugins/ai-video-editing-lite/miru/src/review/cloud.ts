@@ -10,6 +10,7 @@ import { applyAll, remapSpans } from "./edits";
 import { PlanMixer, type AudioIndex, type MixPlan } from "./mixer";
 import { renderCaption, type CaptionStyle } from "./caption";
 import { mark, startDiag } from "./diag";
+import { mergeEdits, planNoteSync, stampOf } from "./notesync";
 
 declare global { interface Window { MIRU_MEDIA?: string; MIRU_CLOUD?: number; __miruStart?: () => void; Audio: typeof Audio } }
 
@@ -42,6 +43,8 @@ async function boot() {
   window.MIRU_MEDIA = `${base}media/`;
   const role: string = video.role;
 
+  // 手直しの一覧も、ほかのファイルと同時に取りに行く（前は読み終わってから順に取りに行き、開くのが 1 往復分遅かった。2026-10-24）
+  const editsAhead = Promise.all([api(`/api/videos/${enc(vid)}/edits/cut`), api(`/api/videos/${enc(vid)}/edits/caption`)]);
   const [manifest, plan, audioIndex, durations, carried, capStyle] = await Promise.all([
     realFetch(base + "manifest.json", { cache: "no-cache" }).then((r) => r.json()),
     realFetch(base + "plan.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)),
@@ -55,6 +58,7 @@ async function boot() {
 
   // ── 手直しを当てた時間軸（手元のサーバーの edited_manifest と同じ形）──
   let cuts: Json = { items: [] }, caps: Json = { items: [] };
+  let capsShown: Json[] | null = null;      // ページがいま持っている字幕の手直し（保存のとき、この画面で変えた分を見分ける相手）
   const plans = new Map<string, MixPlan>();          // 'mix:<rev>' → その時間軸の計画（音を鳴らすのに使う）
   let edited: { key: string; out: Json } | null = null;
   const digest = async (x: unknown) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(x))))].slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -97,23 +101,29 @@ async function boot() {
   }
 
   // ── 修正指示: ページの形（comments.items）とサイトの notes を行き来する ──
+  // 2026-10-24 の点検で見つかったデータの消失を直した: ページが持っている一覧を「サイトの最新」と比べて差を送っていたため、
+  // ページに無い他の人の新しい指示を DELETE し、他の人や AI が直した文・「済」を古い値に PATCH で戻し、消された指示を POST で
+  // 生き返らせていた。いまは「この画面で変えたもの」だけを送る:
+  //   ・足す（POST）: サイトから来ていない（updated_at の無い）指示だけ
+  //   ・直す（PATCH）: ページの写しがサイトと同じ版（updated_at が同じ）のときだけ。サイトの方が新しければ、他の人の変更を残す
+  //   ・消す（DELETE）: ページが一覧を受け取った後に誰も触っていない（updated_at がページの saved_at 以下）指示だけ
+  // saved_at は「件数＋最新の時刻」にして、消されたことも見張りで気づけるようにする。
   const toItem = (n: Json) => ({ ...n, preview: n.version, status: n.status === "done" ? "done" : "open", ...(n.reply ? { reply: n.reply } : {}) });
   let known = new Map<string, Json>();
   async function loadComments() {
     const d = await api(`/api/videos/${enc(vid)}/notes`);
     known = new Map(d.notes.map((n: Json) => [n.id, n]));
-    return { items: d.notes.map(toItem), saved_at: String(Math.max(0, ...d.notes.map((n: Json) => n.updated_at))) };
+    return { items: d.notes.map(toItem), saved_at: stampOf(d.notes) };
   }
   async function saveComments(doc: Json) {
-    const items: Json[] = doc.items ?? [];
-    const ids = new Set(items.map((x) => x.id));
-    for (const it of items) {
-      const n = known.get(it.id);
-      if (!n) await api(`/api/videos/${enc(vid)}/notes`, { method: "POST", json: { ...it, version: it.preview ?? ver } });
-      else if (n.text !== it.text || (n.status === "done") !== (it.status === "done"))
-        await api(`/api/videos/${enc(vid)}/notes/${enc(it.id)}`, { method: "PATCH", json: { text: it.text, status: it.status === "done" ? "done" : n.status === "done" ? "open" : n.status } });
+    await loadComments();                                   // 比べる相手はいまのサイト
+    const { post, patch, del } = planNoteSync(doc.items ?? [], doc.saved_at, known);
+    for (const it of post) await api(`/api/videos/${enc(vid)}/notes`, { method: "POST", json: { ...it, version: it.preview ?? ver } });
+    for (const it of patch) {
+      const n = known.get(it.id)!;
+      await api(`/api/videos/${enc(vid)}/notes/${enc(it.id)}`, { method: "PATCH", json: { text: it.text, status: it.status === "done" ? "done" : n.status === "done" ? "open" : n.status } });
     }
-    for (const id of known.keys()) if (!ids.has(id)) await api(`/api/videos/${enc(vid)}/notes/${enc(id)}`, { method: "DELETE" });
+    for (const id of del) await api(`/api/videos/${enc(vid)}/notes/${enc(id)}`, { method: "DELETE" });
     return loadComments();
   }
 
@@ -124,22 +134,31 @@ async function boot() {
     const body = () => JSON.parse(String(init?.body ?? "{}"));
     try {
       if (p === "/api/manifest") return reply({ ...(await editedManifest()), previews: ready.map((x) => x.name).reverse(), name: ver, comments_file: "MIRU", caption_edits_file: "MIRU", cut_edits_file: "MIRU" });
-      if (p === "/api/comments") return reply(method === "POST" ? await saveComments(body()) : await loadComments());
+      if (p === "/api/comments") {
+        if (method !== "POST" && bootNotes) { const d = await bootNotes; bootNotes = null; if (d) return reply(d); }
+        return reply(method === "POST" ? await saveComments(body()) : await loadComments());
+      }
       if (p === "/api/caption-edits") {
-        if (method !== "POST" && bootCaps) { const d = bootCaps; bootCaps = null; return reply(d); }   // 起動で読んだばかり
+        if (method !== "POST" && bootCaps) { const d = bootCaps; bootCaps = null; capsShown = d.items ?? []; return reply(d); }   // 起動で読んだばかり
         if (method === "POST") {
           if (role === "viewer") return reply({ error: "見るだけの権限です" }, 403);
-          caps = await api(`/api/videos/${enc(vid)}/edits/caption`, { method: "PUT", json: body() });
+          // この画面で変えた分だけ、いまのサイトの一覧に重ねる（他の人が直前に保存した手直しを消さない）
+          // ページは保存の返事の一覧を受け取らず自分の一覧を持ち続けるので、次に比べる相手はページが送ったもの
+          const b = body(), latest = await api(`/api/videos/${enc(vid)}/edits/caption`);
+          caps = await api(`/api/videos/${enc(vid)}/edits/caption`, { method: "PUT", json: { ...b, items: mergeEdits(capsShown, b.items ?? [], latest.items ?? []) } });
+          capsShown = b.items ?? [];
           return reply({ ...caps, manifest: await editedManifest() });
         }
         caps = await api(`/api/videos/${enc(vid)}/edits/caption`);
+        capsShown = caps.items ?? [];
         return reply(caps);
       }
       if (p === "/api/cut-edits") {
         if (method !== "POST" && bootCuts) { const d = bootCuts; bootCuts = null; return reply(d); }
         if (method === "POST") {
           if (role === "viewer") return reply({ error: "見るだけの権限です" }, 403);
-          cuts = await api(`/api/videos/${enc(vid)}/edits/cut`, { method: "PUT", json: body() });
+          const b = body(), latest = await api(`/api/videos/${enc(vid)}/edits/cut`);
+          cuts = await api(`/api/videos/${enc(vid)}/edits/cut`, { method: "PUT", json: { ...b, items: mergeEdits(cuts.items ?? null, b.items ?? [], latest.items ?? []) } });
           return reply({ ...cuts, manifest: await editedManifest() });
         }
         cuts = await api(`/api/videos/${enc(vid)}/edits/cut`);
@@ -228,7 +247,8 @@ async function boot() {
   header.prepend(home);
 
   // 先に今の手直しを読んでおく（最初の /api/manifest で使い、ページが続けて取りに来る分にもそのまま返す）
-  [cuts, caps] = await Promise.all([api(`/api/videos/${enc(vid)}/edits/cut`), api(`/api/videos/${enc(vid)}/edits/caption`)]);
+  [cuts, caps] = await editsAhead;
+  bootNotes = loadComments().catch(() => null);      // ページがすぐ取りに来る修正指示も先に
   bootCuts = cuts; bootCaps = caps;
   mark("edits");
   window.__miruStart?.();
@@ -236,6 +256,7 @@ async function boot() {
   prefetchImages(manifest, base, ver);
 }
 let bootCuts: Json | null = null, bootCaps: Json | null = null;
+let bootNotes: Promise<Json | null> | null = null;
 
 /** 字幕・強調などの画像を、再生位置の少し先（1 分）だけ、優先度を低くして裏で読んでおく。
  *  2026-10-23 の再生の記録で確定: 前の先読み（優先度の高い fetch を 4 本ずつ、全部の画像 600 本以上を 55 秒続けて）が、

@@ -183,8 +183,14 @@ let videoId = "";
 export async function send(why: string, keepalive = false): Promise<string | null> {
   if (!videoId) return null;
   sending = true; lastSend = performance.now();
-  const body = JSON.stringify({ why, at: new Date().toISOString(), context: context(), events: events.slice(keepalive ? -150 : -1500),
-    net: net.slice(keepalive ? -100 : -1500) });
+  // MIRU が受け取るのは 1 件 256KB まで（離れるときの keepalive は 64KB まで）。新しい方を残して入るまで減らす
+  const limit = keepalive ? 60_000 : 240_000;
+  let ne = keepalive ? 150 : 1500, nn = keepalive ? 100 : 1500, body = "";
+  for (;;) {
+    body = JSON.stringify({ why, at: new Date().toISOString(), context: context(), events: events.slice(-ne), net: net.slice(-nn) });
+    if (new TextEncoder().encode(body).length <= limit || (ne < 20 && nn < 20)) break;
+    ne = Math.floor(ne / 2); nn = Math.floor(nn / 2);
+  }
   try {
     const r = await fetch(`/api/videos/${encodeURIComponent(videoId)}/diag`, { method: "POST", credentials: "same-origin", keepalive,
       headers: { "content-type": "application/json", "x-miru": "1" }, body });

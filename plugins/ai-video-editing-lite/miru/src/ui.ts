@@ -70,7 +70,7 @@ export function sheet(content: HTMLElement | string, opt: { onClose?: () => void
 }
 
 // ── 横にスワイプすると、下に敷いたボタンが出る（右へ＝left の動き、左へ＝right の動き）──
-export type SwipeSide = { label: string; cls?: string; run: () => void | Promise<void> };
+export type SwipeSide = { label: string; cls?: string; confirm?: string; run: () => void | Promise<void> };
 export function swipeable(row: HTMLElement, sides: { left?: SwipeSide; right?: SwipeSide }): HTMLElement {
   const wrap = h(`<div class="swipe"><div class="under"><div class="l ${sides.left?.cls ?? ""}">${esc(sides.left?.label ?? "")}</div><div class="r ${sides.right?.cls ?? ""}">${esc(sides.right?.label ?? "")}</div></div></div>`);
   row.classList.add("row");
@@ -105,6 +105,8 @@ export function swipeable(row: HTMLElement, sides: { left?: SwipeSide; right?: S
     // スワイプの後の「押した」を捨てる
     row.addEventListener("click", (ev) => { ev.stopPropagation(); ev.preventDefault(); }, { capture: true, once: true });
     setTimeout(() => row.dispatchEvent(new Event("swipe-settled")), 0);
+    // 消すなど戻せない操作は、確かめてから（2026-10-24 の点検: 縦に流す途中の誤スワイプで版が R2 ごと消えていた）
+    if (act?.confirm && !confirm(act.confirm)) { row.style.transform = ""; hide(); return; }
     if (act) { try { await act.run(); } finally { setTimeout(() => { row.style.transform = ""; }, 260); } }
   };
   row.addEventListener("pointerup", end); row.addEventListener("pointercancel", end);

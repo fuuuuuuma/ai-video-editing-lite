@@ -8,6 +8,7 @@
 
 import { json } from "./auth";
 import { handleApi, type Env } from "./api";
+import type { Waiter } from "./notify";
 import { editionOf, VERSION } from "./version";
 
 const PROTOCOL = "2025-06-18";
@@ -22,7 +23,7 @@ export const TOOLS: Tool[] = [
     run: (_a, call) => call("GET", "/api/channels") },
   { name: "list_videos", description: "チャンネルの動画の一覧（状態・最新の版・未対応の修正指示の数）", inputSchema: obj({ channel: str("チャンネルの名前（my-channel など）") }, ["channel"]),
     run: (a, call) => call("GET", `/api/channels/${enc(a.channel)}/videos`) },
-  { name: "get_review", description: "動画の確認状況: 版の一覧・修正指示（全部）・画面での手直しの件数。次の版を作る前に読む", inputSchema: obj({ video: str("動画の名前") }, ["video"]),
+  { name: "get_review", description: "動画の確認状況: 版の一覧（いちばん新しい見られる版に approved_by・approved_at があり、そのあとの未対応の修正指示が無ければ承認済み＝完成版を作ってよい。古い版の承認は、その後に直した版があれば済んだもの）・修正指示（全部）・画面での手直しの件数。次の版を作る前に読む", inputSchema: obj({ video: str("動画の名前") }, ["video"]),
     async run(a, call, origin) {
       const v = await call("GET", `/api/videos/${enc(a.video)}`) as Record<string, unknown>;
       const notes = await call("GET", `/api/videos/${enc(a.video)}/notes`);
@@ -88,10 +89,12 @@ const INSTRUCTIONS = {
     `Codex: codex plugin marketplace add ${LITE_REPO} → codex plugin add ai-video-editing-lite@ai-video-editing-lite）。` +
     "作風（字幕・強調の見た目）は lite がこの PC に覚えている。できた動画は lite の scripts/miru_sync.py publish で上げ、preview_link を送る。" +
     "修正は get_review と get_edits で読み、次の版を作ったら reply_note で返事する。" +
+    "get_review のいちばん新しい見られる版に approved_by があり、そのあとの未対応の修正指示が無ければ、その版は承認済み（見る人の OK）。完成版を書き出すかを利用者に聞いてから、lite の手順で書き出す。" +
     "MIRU そのものを立てる・つなぐ・新しい版にする・自分用に直すときは、スキル miru-setup（Claude Code は /ai-video-editing-lite:miru-setup、Codex は $miru-setup）を使う。",
 };
 
-export async function handleMcp(req: Request, env: Env): Promise<Response | null> {
+// ctx は通知（reply_note の「返事しました」など）を応答の後も送り切るため（2026-10-25。渡していなかったので、MCP からの返事は通知が捨てられていた）
+export async function handleMcp(req: Request, env: Env, ctx?: Waiter): Promise<Response | null> {
   const url = new URL(req.url);
   if (url.pathname !== "/mcp") return null;
   if (req.method !== "POST") return new Response(null, { status: 405, headers: { allow: "POST" } });
@@ -106,7 +109,7 @@ export async function handleMcp(req: Request, env: Env): Promise<Response | null
   const call: Caller = async (method, path, body) => {
     const r = await handleApi(new Request(url.origin + path, {
       method, headers: { authorization: auth, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body),
-    }), env);
+    }), env, ctx);
     const out = r ? await r.json() as Record<string, unknown> : { error: "ありません" };
     if (!r || !r.ok) throw new Error(String(out.error ?? r?.status));
     return out;

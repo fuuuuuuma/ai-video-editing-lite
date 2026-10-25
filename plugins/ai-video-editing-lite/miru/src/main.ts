@@ -106,13 +106,14 @@ async function pageDoc(kind: "privacy" | "terms") {
   const closed = !!site.invite_only;
   const sec = (t: string, d: string) => `<h2>${t}</h2><p class="small">${d}</p>`;
   const body = kind === "privacy" ? `
-    ${sec("集める情報", "Google でログインしたときの名前・メールアドレス・プロフィール写真、修正指示と画面での手直し、チャンネルの管理者が上げた確認用の動画・画像・音、ログインを保つための cookie。")}
-    ${sec("使い方", "ログインと、招待されたチャンネルの動画を見せること、修正指示と手直しを動画の制作に使うことだけに使います。広告には使いません。売ったり、第三者に渡したりしません。")}
+    ${sec("集める情報", "Google でログインしたときの名前・メールアドレス・プロフィール写真、修正指示と画面での手直し、版を承認した人と時刻、チャンネルの管理者が上げた確認用の動画・画像・音、ログインを保つための cookie。確認画面で再生がうまくいかなかったときは、その記録（ブラウザの種類・回線の種類と速さ・つながった Cloudflare の拠点・読み込みにかかった時間など。メールアドレスは入れません）。")}
+    ${sec("使い方", "ログインと、招待されたチャンネルの動画を見せること、修正指示と手直しを動画の制作に使うこと、再生の不具合を直すことだけに使います。広告には使いません。売ったり、第三者に渡したりしません（下の「通知」を除きます）。")}
     ${sec("置き場所", "Cloudflare（D1・R2）に置きます。ログインの印はそのままではなく SHA-256 で置きます。修正指示を読みやすく整える機能を使ったときは、その文を Cloudflare Workers AI で処理します。")}
-    ${closed ? sec("見られる人", "このサイトに入れるのは、持ち主と、持ち主がチャンネルに招待した人だけです。チャンネルの動画と指示は、そのチャンネルに招待された人だけが見られます。")
-    : sec("見られる人", "チャンネルを作った人と、その人が招待した人だけが、そのチャンネルの動画と指示を見られます。サイトの運営者にも、画面や道具から他の人のチャンネルを見る権限はありません（障害の調べものでデータベースに直接触れるときを除き、中身は見ません）。")}
-    ${closed ? sec("残す期間", "上げ終わらなかったプレビューは 2 日で消えます。使われなくなったログインの印と、期限（1 年）の切れた鍵、招待を全部外された人の記録も消えます。")
-    : sec("残す期間", "上げ終わらなかったプレビューは 2 日で、無料の容量で使っている人の古い版（各動画の新しい 2 つより前で 30 日たったもの）は自動で消えます。使われなくなったログインの印と、期限（1 年）の切れた鍵も消えます。")}
+    ${sec("通知", "チャンネルの管理者が通知の送り先（Slack か Discord）を決めたときだけ、新しい版・修正指示・返事・承認の知らせを、そこへ送ります。知らせには、チャンネル名・動画の題名・版の名前・修正指示と返事の文（一部）と時間の位置・書いた人や承認した人の Google の名前・このサイトへのリンクが入ります（メールアドレスは入れません）。")}
+    ${closed ? sec("見られる人", "このサイトに入れるのは、持ち主と、持ち主がチャンネルに招待した人だけです。チャンネルの動画と指示は、そのチャンネルに招待された人だけが見られます。再生の記録は、そのチャンネルの「指示できる」人と管理者が見られます（だれの記録かは、メールアドレスから作った短い印で分けます）。")
+    : sec("見られる人", "チャンネルを作った人と、その人が招待した人だけが、そのチャンネルの動画と指示を見られます。サイトの運営者にも、画面や道具から他の人のチャンネルを見る権限はありません（障害の調べものでデータベースに直接触れるときを除き、中身は見ません）。再生の記録は、そのチャンネルの「指示できる」人と管理者が見られます。")}
+    ${closed ? sec("残す期間", "上げ終わらなかったプレビューは 2 日で、再生の記録は 14 日で消えます。使われなくなったログインの印と、期限（1 年）の切れた鍵、招待を全部外された人の記録も消えます。")
+    : sec("残す期間", "上げ終わらなかったプレビューは 2 日で、再生の記録は 14 日で、無料の容量で使っている人の古い版（各動画の新しい 2 つより前で 30 日たったもの）は自動で消えます。使われなくなったログインの印と、期限（1 年）の切れた鍵も消えます。")}
     ${sec("消す", "チャンネルは設定の画面から、動画・版ごと消せます。アカウントごと消したいときは、下の連絡先までお知らせください。")}
     ${sec("連絡先", esc(contact))}` : `
     ${closed ? sec("このサイト", `MIRU${site.edition === "light" ? " ライト" : ""} は、動画のプレビューを上げ、招待した人と一緒に見て修正指示を入れるためのサイトです。このサイトの持ち主（下の連絡先）が自分の Cloudflare で動かしています。チャンネルを作れるのは持ち主だけで、ほかの人は招待されたチャンネルだけを見られます。`)
@@ -125,7 +126,7 @@ async function pageDoc(kind: "privacy" | "terms") {
     ${sec("保証", "サイトは現状のまま提供します。消えて困るものは、別に控えを残してください。")}
     ${sec("連絡先", esc(contact))}`;
   app.innerHTML = `<header class="top"><a class="logo" href="/" data-go><i>M</i>MIRU</a></header>
-    <main><div class="page"><h1>${kind === "privacy" ? "プライバシーポリシー" : "利用規約"}</h1><div class="glass card">${body}<p class="small muted">2026年10月23日</p></div></div></main>`;
+    <main><div class="page"><h1>${kind === "privacy" ? "プライバシーポリシー" : "利用規約"}</h1><div class="glass card">${body}<p class="small muted">2026年10月25日</p></div></div></main>`;
   document.title = `${kind === "privacy" ? "プライバシーポリシー" : "利用規約"} | MIRU`;
 }
 
@@ -194,20 +195,41 @@ async function videoSheet(v: Video, role: string) {
     <div class="hstack" style="margin-bottom:14px"><span class="pill st-${v.status}">${STATUS[v.status]}</span><span class="small muted">${ago(v.updated_at)}に更新</span></div>
     <div id="vs">${skeleton.rows(2)}</div>`);
   try {
-    const d = await api<{ versions: { name: string; ready: number; created_at: number; bytes: number; note: string }[]; openNotes: number; role: string }>(`/api/videos/${encodeURIComponent(v.id)}`);
+    const d = await api<{ versions: { name: string; ready: number; created_at: number; bytes: number; note: string; approved_by: string | null; approved_at: number | null }[]; openNotes: number; role: string }>(`/api/videos/${encodeURIComponent(v.id)}`);
     const ready = d.versions.filter((x) => x.ready);
     const cutOnly = (x: { note: string }) => /カットだけ/.test(x.note ?? "");     // トンマナが無いときの仮編集（字幕と強調はまだ）
     const box = $("#vs", s.body)!;
     box.innerHTML = `
       ${ready.length ? `<a class="btn primary wide" href="/v/${encodeURIComponent(v.id)}?ver=${encodeURIComponent(ready[0].name)}">${esc(ready[0].name)} を見る</a>${cutOnly(ready[0]) ? `<div class="small muted" style="margin:8px 2px 0">カットだけの仮編集です（字幕と強調はまだ）</div>` : ""}` : `<div class="glass card small muted">まだプレビューが上がっていません</div>`}
       ${d.openNotes ? `<div class="small" style="margin:10px 2px 0">未対応の修正指示 <b>${d.openNotes}</b> 件</div>` : ""}
+      ${ready.length ? `<div id="vapr" style="margin-top:12px"></div>` : ""}
       ${role !== "viewer" ? `<h2>状態</h2><div class="seg" id="vst">${["editing", "review", "fixing", "done"].map((k) => `<button data-s="${k}" class="${v.status === k ? "on" : ""}">${STATUS[k]}</button>`).join("")}</div>` : ""}
       ${ready.length > 1 ? `<h2>前の版</h2><div class="list" id="vold"></div>` : ""}
       ${role === "owner" ? `<h2>管理</h2><button class="btn danger wide" id="vdel">この動画を消す</button>` : ""}`;
+    // 承認（「この版で OK」）: 誰がいつ出したかを残す。指示できる人以上が出せる（2026-10-24）
+    const apr = $("#vapr", box);
+    const drawApproval = () => {
+      if (!apr) return;
+      const x = ready[0];
+      apr.innerHTML = x.approved_by
+        ? `<div class="glass card small">✓ <b>${esc(x.name)}</b> を ${esc(x.approved_by)} が承認（${ago(x.approved_at!)}）${role !== "viewer" ? ` <button class="btn sm" id="vunapr">取り消す</button>` : ""}</div>`
+        : role !== "viewer" ? `<button class="btn wide" id="vapr1">${esc(x.name)} でOK（承認する）</button>` : "";
+      $("#vapr1", apr)?.addEventListener("click", async () => {
+        if (!confirm(`${x.name} を承認しますか？動画は「完了」になります（通知の送り先があれば、知らせが届きます）`)) return;
+        const r = await api<{ approved_by: string; approved_at: number }>(`/api/videos/${encodeURIComponent(v.id)}/versions/${encodeURIComponent(x.name)}/approve`, { method: "POST" });
+        x.approved_by = r.approved_by; x.approved_at = r.approved_at; v.status = "done"; drawApproval(); toast(`${x.name} を承認しました`); pageHome(v.channel_id);
+      });
+      $("#vunapr", apr)?.addEventListener("click", async () => {
+        if (!confirm(`${x.name} の承認を取り消しますか？`)) return;
+        await api(`/api/videos/${encodeURIComponent(v.id)}/versions/${encodeURIComponent(x.name)}/approve`, { method: "DELETE" });
+        x.approved_by = null; x.approved_at = null; v.status = "review"; drawApproval(); toast("承認を取り消しました"); pageHome(v.channel_id);
+      });
+    };
+    drawApproval();
     const old = $("#vold", box);
     for (const x of ready.slice(1)) {
-      const row = h(`<a class="glass row-item" href="/v/${encodeURIComponent(v.id)}?ver=${encodeURIComponent(x.name)}"><b>${esc(x.name)}</b><span class="grow small muted">${ago(x.created_at)}・この版だけの分 ${gb(x.bytes)}${cutOnly(x) ? "・カットだけ" : ""}</span>›</a>`);
-      old?.append(role === "owner" ? swipeable(row, { right: { label: "この版を消す", run: async () => {
+      const row = h(`<a class="glass row-item" href="/v/${encodeURIComponent(v.id)}?ver=${encodeURIComponent(x.name)}"><b>${esc(x.name)}</b><span class="grow small muted">${ago(x.created_at)}・この版だけの分 ${gb(x.bytes)}${cutOnly(x) ? "・カットだけ" : ""}${x.approved_by ? "・承認済み" : ""}</span>›</a>`);
+      old?.append(role === "owner" ? swipeable(row, { right: { label: "この版を消す", confirm: `${x.name} を消しますか？ファイルも消え、元に戻せません`, run: async () => {
         await api(`/api/videos/${encodeURIComponent(v.id)}/versions/${encodeURIComponent(x.name)}`, { method: "DELETE" });
         me = await api<Me>("/api/me"); toast(`${x.name} を消しました`); row.remove();
       } } }) : row);
@@ -339,7 +361,7 @@ async function pageSettings() {
     const box = $("#tkList")!; box.replaceChildren();
     for (const t of r.tokens) {
       const row = h(`<div class="glass row-item"><div class="grow"><b>${esc(t.label)}</b>${t.scope === "admin" ? ` <span class="small" style="color:var(--warn)">持ち主用</span>` : ""}<div class="small muted">${ago(t.created_at)}に作成・${t.last_used_at ? `${ago(t.last_used_at)}に使用` : "まだ使われていません"}${t.expires_at ? `・${day(t.expires_at)}まで` : ""}</div></div></div>`);
-      box.append(swipeable(row, { right: { label: "この鍵を消す", run: async () => { await api(`/api/tokens/${t.id}`, { method: "DELETE" }); toast("鍵を消しました"); drawTokens(); } } }));
+      box.append(swipeable(row, { right: { label: "この鍵を消す", confirm: "この鍵を消しますか？この鍵を使っている AI はつながらなくなります", run: async () => { await api(`/api/tokens/${t.id}`, { method: "DELETE" }); toast("鍵を消しました"); drawTokens(); } } }));
     }
     if (r.tokens.length) box.append(h(`<div class="small muted" style="text-align:center">左へスワイプで鍵を消せます</div>`));
   };
@@ -411,7 +433,7 @@ async function pageSettings() {
         const row = h(`<div class="glass row-item"><div class="grow"><b>${esc(m.name ?? m.email)}</b><div class="small muted">${esc(m.email)}</div></div>
           <select style="width:auto" aria-label="役割">${["viewer", "editor", "owner"].map((k) => `<option value="${k}" ${m.role === k ? "selected" : ""}>${ROLE[k]}</option>`).join("")}</select></div>`);
         $("select", row)!.addEventListener("change", async (e) => { await api(`/api/channels/${encodeURIComponent(c.id)}/members`, { method: "POST", body: { email: m.email, role: (e.target as HTMLSelectElement).value } }); toast("役割を変えました"); });
-        list.append(swipeable(row, { right: { label: "招待を外す", run: async () => { await api(`/api/channels/${encodeURIComponent(c.id)}/members/${encodeURIComponent(m.email)}`, { method: "DELETE" }); toast("外しました"); drawChannels(); } } }));
+        list.append(swipeable(row, { right: { label: "招待を外す", confirm: `${m.email} の招待を外しますか？`, run: async () => { await api(`/api/channels/${encodeURIComponent(c.id)}/members/${encodeURIComponent(m.email)}`, { method: "DELETE" }); toast("外しました"); drawChannels(); } } }));
       }
       const form = h(`<div class="stack"><input type="email" placeholder="招待するメールアドレス" autocomplete="off"><div class="hstack"><select style="flex:1">${["viewer", "editor", "owner"].map((k) => `<option value="${k}" ${k === "editor" ? "selected" : ""}>${ROLE[k]}</option>`).join("")}</select><button class="btn primary">招待する</button></div></div>`);
       const input = $("input", form) as HTMLInputElement;
@@ -433,6 +455,27 @@ async function pageSettings() {
         toast("案内をコピーしました");
       });
       card.append(share);
+      // 通知: 新しい版・修正指示・返事・承認を Slack か Discord へ（2026-10-24）。送り先そのものは画面に出さない
+      const nt = h(`<div class="stack" style="margin-top:6px"><div class="small"><b>通知</b> <span class="muted" data-st>…</span></div>
+        <input type="url" placeholder="Slack か Discord の Incoming Webhook の URL" autocomplete="off">
+        <div class="hstack"><button class="btn sm" data-save>保存</button><button class="btn sm" data-test>試しに送る</button><button class="btn sm" data-off>止める</button></div>
+        <div class="small muted">新しい版・修正指示・返事・承認をここに送ります。URL は Slack の「Incoming Webhooks」か、Discord のチャンネルの「連携サービス → ウェブフック」で作れます。</div></div>`);
+      const st = $("[data-st]", nt)!, url = $("input", nt) as HTMLInputElement;
+      const showSt = (x: { set: boolean; kind?: string; tail?: string }) => { st.textContent = x.set ? `${x.kind === "discord" ? "Discord" : "Slack"} に送っています（…${x.tail}）` : "送り先なし"; };
+      api<{ set: boolean; kind?: string; tail?: string }>(`/api/channels/${encodeURIComponent(c.id)}/notify`).then(showSt).catch(() => { st.textContent = ""; });
+      $("[data-save]", nt)!.addEventListener("click", async () => {
+        try { showSt(await api(`/api/channels/${encodeURIComponent(c.id)}/notify`, { method: "PUT", body: { url: url.value } })); url.value = ""; toast("通知の送り先を保存しました"); }
+        catch (e) { toast((e as Error).message, "err"); }
+      });
+      $("[data-test]", nt)!.addEventListener("click", async () => {
+        try { await api(`/api/channels/${encodeURIComponent(c.id)}/notify/test`, { method: "POST" }); toast("試しに送りました。届いたか確かめてください"); }
+        catch (e) { toast((e as Error).message, "err"); }
+      });
+      $("[data-off]", nt)!.addEventListener("click", async () => {
+        if (!confirm("このチャンネルの通知を止めますか？")) return;
+        showSt(await api(`/api/channels/${encodeURIComponent(c.id)}/notify`, { method: "PUT", body: { url: "" } })); toast("通知を止めました");
+      });
+      card.append(nt);
       card.append(del);
     }
     if (!me!.channels.length) box.innerHTML = `<div class="glass card small muted">まだチャンネルがありません</div>`;

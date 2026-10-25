@@ -144,6 +144,12 @@ node ~/MIRU/tools/setup.mjs check
 MIRU からはメールが送られないので、「招待した人に送る案内をコピー」を押して、LINE やメールで相手に送ってください。
 相手は、そのメールアドレスの Google アカウントでログインすると、チャンネルが見えます。招待していない人は、ログインしても入れません。
 
+### 通知と承認
+
+- **通知**: 「設定」→ チャンネル →「通知」に、Slack の Incoming Webhook（https://hooks.slack.com/services/…）か、Discord のウェブフック（チャンネルの設定 →「連携サービス」→「ウェブフック」）の URL を入れて「保存」→「試しに送る」。新しい版・修正指示・返事・承認が、そこに届きます。決められるのは管理者だけです。知らせには、チャンネル名・動画の題名・版の名前・指示と返事の文（一部）と時間の位置・書いた人や承認した人の名前・あなたの MIRU へのリンクが入ります（メールアドレスは入りません）。
+  通知の URL は鍵と同じように扱ってください（知っている人は誰でもそこへ書き込めます）。人や AI のチャットに貼らないでください。`backup` の控えにも入ります。
+- **承認**: 見る人が、動画のパネルで「v3 でOK（承認する）」を押すと、誰がいつ承認したかが残り、動画は「完了」になります（取り消すと「確認待ち」に戻ります）。押せるのは「指示できる」人と管理者です。AI動画編集 lite は、承認された版を見つけると、完成版を書き出すかを聞きます。
+
 ---
 
 ## 5. 自分用に直す
@@ -198,8 +204,10 @@ node <新しい MIRU の場所>/tools/setup.mjs update
 | 「容量の上限（9.0GB）を超えます」 | 古い版を消して空けます。超えた分を払ってよいなら `node ~/MIRU/tools/setup.mjs quota --gb 30` など |
 | PowerShell で「このシステムではスクリプトの実行が無効」 | `npx` の代わりに `npx.cmd` を使います（`npx.cmd wrangler secret put GOOGLE_CLIENT_SECRET`） |
 | 修正指示の「AI で整える」が働かない | Workers AI の無料の範囲を超えたか、使っている AI のモデルが有料プラン向けです。文はそのまま残るので、修正には困りません |
+| 通知の URL で「Slack か Discord の Incoming Webhook の URL を…」と出る | Slack は `https://hooks.slack.com/services/…`、Discord は `https://discord.com/api/webhooks/…` の形だけを受け付けます（ほかの宛先へは送りません）。作り直した URL をそのまま貼ります |
+| 「試しに送る」を押しても届かない | URL を作り直したか、Slack・Discord の側でウェブフックを消していないかを確かめ、新しい URL を「保存」し直します。届かなくても、MIRU のほかの操作は止まりません |
 
-直らないときは、GitHub の Issues（https://github.com/fuuuuuuma/ai-video-editing-lite/issues）に、`node ~/MIRU/tools/setup.mjs check` の結果と、何をしたら何が出たかを書いてください。**シークレットや鍵（`GOCSPX-`・`miru_` で始まる値）は貼らないでください。**
+直らないときは、GitHub の Issues（https://github.com/fuuuuuuma/ai-video-editing-lite/issues）に、`node ~/MIRU/tools/setup.mjs check` の結果と、何をしたら何が出たかを書いてください。**シークレットや鍵（`GOCSPX-`・`miru_` で始まる値）と、通知の URL（`hooks.slack.com/services/…`・`discord.com/api/webhooks/…`）は貼らないでください。**
 
 ## やめる
 
