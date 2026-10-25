@@ -90,30 +90,40 @@ import os, sys
 # AIVE_FORCE_UTF8 は Windows でない所で試すため。印は「起動し直した親の番号」で、起動し直された本人だけが読み飛ばす（孫は自分で判断する）
 if ((os.name == 'nt' or os.environ.get('AIVE_FORCE_UTF8')) and not sys.flags.utf8_mode
         and os.environ.get('AIVE_UTF8_REEXEC') != str(os.getppid())):
-    code = 1
+    child = None
     try:
         import signal, subprocess
         os.environ['PYTHONUTF8'] = '1'                      # ここから呼ぶ子にも（-I で呼ばない子）
         os.environ['AIVE_UTF8_REEXEC'] = str(os.getpid())
         argv = list(getattr(sys, 'orig_argv', None) or [sys.executable, *sys.argv])
         child = subprocess.Popen([sys.executable, '-X', 'utf8', *argv[1:]])
-        # Ctrl+C は本体（子）が受けて後始末をする。親は待つだけ（親が先に止まると本体が途中で切られる）。
-        # 子を起動してから無視する（先に無視すると、子にも「無視」が引き継がれて Ctrl+C が効かなくなる）
-        for name in ('SIGINT', 'SIGBREAK'):
-            if hasattr(signal, name):
-                signal.signal(getattr(signal, name), signal.SIG_IGN)
-        code = child.wait()
-        if code < 0:                                        # シグナルで止まった（POSIX）: シェルと同じ 128+番号
-            code = 128 - code
-        elif code > 0x7FFFFFFF:                             # Windows の 0xC0000005 など: os._exit に渡せる形に
-            code -= 1 << 32
-    except BaseException:                                   # ここで例外を出すと「起動の失敗」に見えるので、終了コードだけ返す
+    except Exception as e:                                  # 起動し直せない: 黙って終わらずに言って、UTF-8 モードでないまま続ける（2026-10-25）
+        os.environ.pop('AIVE_UTF8_REEXEC', None)
+        try:
+            msg, enc = f'aive_utf8: UTF-8 モードで起動し直せませんでした（{e}）。このまま続けます\\n', sys.stderr.encoding or 'utf-8'
+            sys.stderr.write(msg.encode(enc, 'replace').decode(enc))          # 日本語を出せない画面（英語の Windows など）でも止まらない
+        except Exception:
+            pass
+    if child is not None:
         code = 1
-    try:
-        sys.stdout.flush(); sys.stderr.flush()
-    except Exception:
-        pass
-    os._exit(code)                                          # site の読み込み中なので sys.exit は使えない（起動の失敗になる）
+        try:
+            # Ctrl+C は本体（子）が受けて後始末をする。親は待つだけ（親が先に止まると本体が途中で切られる）。
+            # 子を起動してから無視する（先に無視すると、子にも「無視」が引き継がれて Ctrl+C が効かなくなる）
+            for name in ('SIGINT', 'SIGBREAK'):
+                if hasattr(signal, name):
+                    signal.signal(getattr(signal, name), signal.SIG_IGN)
+            code = child.wait()
+            if code < 0:                                    # シグナルで止まった（POSIX）: シェルと同じ 128+番号
+                code = 128 - code
+            elif code > 0x7FFFFFFF:                         # Windows の 0xC0000005 など: os._exit に渡せる形に
+                code -= 1 << 32
+        except BaseException:                               # ここで例外を出すと「起動の失敗」に見えるので、終了コードだけ返す
+            code = 1
+        try:
+            sys.stdout.flush(); sys.stderr.flush()
+        except Exception:
+            pass
+        os._exit(code)                                      # site の読み込み中なので sys.exit は使えない（起動の失敗になる）
 """
 
 

@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        先に AI に「MIRU を確かめて」と頼むか、`node ~/MIRU/tools/setup.mjs check` を動かしてみてください。多くはそこで直す所が出ます。
+        先に AI に「MIRU を確かめて」と頼むか、`node ~/MIRU/tools/setup.mjs check`（Windows の PowerShell は `node $HOME\MIRU\tools\setup.mjs check`）を動かしてみてください。多くはそこで直す所が出ます。
         **シークレットや鍵（`GOCSPX-`・`miru_` で始まる値）は、ここに貼らないでください。** 貼ってしまったら作り直してください。
   - type: dropdown
     id: where

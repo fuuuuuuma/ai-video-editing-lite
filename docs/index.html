@@ -387,10 +387,10 @@ const PHASES = [
         "MIRU にログインする Google アカウントを決める（ふだんの Gmail で大丈夫です）"),
       box("費用", "Cloudflare の無料の範囲で使えます。動画の置き場（R2）は 10GB まで無料で、MIRU ライトは 9GB で止まるので、置いた量で請求が来ることはありません。"),
     ] },
-    { id: "node", who: "you", t: "Node.js 22 以上を入れる", d: "セットアップの道具を動かすため", body: () => [
+    { id: "node", who: "you", t: "Node.js 22.12 以上を入れる", d: "セットアップの道具を動かすため", body: () => [
       steps(`${link("https://nodejs.org/", "nodejs.org")} から LTS を入れる`, "ターミナル（Windows は PowerShell）で確かめる"),
       code("node -v"),
-      box("", "v22.12 より大きい数字（v22.12.0・v24.x など）が出れば大丈夫です。v20 では途中で止まります。"),
+      box("", "v22.12 以上の数字（v22.12.0・v24.x など）が出れば大丈夫です。v20 では途中で止まります。"),
     ] },
     { id: "lite", who: "you", t: "AI動画編集 lite を入れる", d: "2 行のコマンド", body: () => [
       box("", `${S.ai === "claude" ? "Claude Code" : "Codex"} を入れたターミナルで、この 2 行を動かします。`),
@@ -467,7 +467,7 @@ const PHASES = [
       steps("MIRU の「設定」→「Claude Code・Codex とつなぐ」→「鍵を作る」",
         S.ai === "claude" ? "「コマンドをコピー」を押して、ターミナルに貼る（<span class=\"mono\">claude mcp add …</span>）" : `「${W() ? "Windows" : "Mac"} 用をコピー」を押してターミナルに貼り、Codex を開き直す`,
         `「上げる道具用をコピー（${W() ? "Windows" : "Mac"}）」を押して、ターミナルに貼る（動画を上げる道具が使う鍵と場所を置きます）`),
-      box("鍵の期限と範囲", "1 年で切れます。切れたら同じ画面で作り直します。この鍵では、消す・招待する・鍵を作ることはできません（それらは MIRU の画面で）。前に miru をつないでいたら、Claude Code は先に claude mcp remove -s user miru を動かします（Codex と上げる道具は置き換わります）。鍵（miru_…）は人や AI のチャットに貼らないでください。"),
+      box("鍵の期限と範囲", "1 年で切れます。切れたら同じ画面で作り直します。この鍵では、消す・招待する・鍵を作ることはできません（それらは MIRU の画面で）。前に miru をつないでいたら、Claude Code は先に claude mcp remove -s user miru を動かします（0.2.2 までの画面のコマンドでつないだフォルダーでは claude mcp remove -s local miru も。Codex と上げる道具は置き換わります）。上げ終わった版は同じ名前で上げ直せません（直した版は v3-2 のように別の名前で）。鍵（miru_…）は人や AI のチャットに貼らないでください。"),
     ] },
     { id: "invite", who: "you", opt: true, skip: "しない", t: "人を招待する", d: "見せたい人がいるとき", body: () => [
       steps("「設定」→ チャンネル → メールと役割（管理者・指示できる・見るだけ）→「招待する」", "「招待した人に送る案内をコピー」を押し、LINE やメールで相手に送る", "相手は、そのメールの Google アカウントでログインします"),
@@ -483,7 +483,7 @@ const TROUBLES = [
   { id: "subdomain", g: "cf", c: ["#3d9bff", "#0a72e8"], t: "workers.dev の名前がまだ決まっていません", k: "workers.dev subdomain onboarding サブドメイン 名前", body: () => [steps("出たリンク（…/workers/onboarding）で英字の名前を登録", "同じコマンドをもう一度")] },
   { id: "multi", g: "cf", c: ["#5e5ce6", "#7a5cff"], t: "Cloudflare のアカウントが複数あります", k: "More than one account account_id --account 複数", body: () => [box("", "出た一覧から使うアカウントの ID を選び、AI に伝えます。AI が --account を付けて動かし直します。"), code(setupCmd(`start --owner ${email()} --account <アカウントID>`), placeholders())] },
   { id: "verify", g: "cf", c: ["#ff9f0a", "#ffb340"], t: "Cloudflare のメールアドレスの確認がまだです", k: "verify email 10034 確認 メール", body: () => [steps("Cloudflare から届いたメールの確認のリンクを押す（迷惑メールの中も探す）", "同じコマンドをもう一度")] },
-  { id: "exists", g: "cf", c: ["#8a94a6", "#5b6577"], t: "もう「miru」という名前の D1 があります", k: "D1 already exists --reuse --name 名前 ぶつかる", body: () => [box("", "前に立てた MIRU を使い直すなら --reuse、別に立てるなら --name 別の名前。AI に「前のを使う」か「別に立てる」と伝えます。")] },
+  { id: "exists", g: "cf", c: ["#8a94a6", "#5b6577"], t: "もう「miru」という名前の D1・R2・Worker があります", k: "D1 R2 Worker already exists --reuse --name 名前 ぶつかる 7", body: () => [box("", "前に立てた MIRU を使い直すなら --reuse、別に立てるなら --name 別の名前。AI に「前のを使う」か「別に立てる」と伝えます。")] },
   { id: "notready", g: "g", c: ["#3d9bff", "#7a5cff"], t: "ログインはまだ用意されていません", k: "503 ログイン 用意 client secret", body: () => [box("", "Google の設定がまだです。クライアント ID（AI に渡す）とシークレット（自分で入れる）の両方が要ります。"), code(secretCmd()), code(setupCmd("check"))] },
   { id: "redirect", g: "g", c: ["#ff3b30", "#ff6a3d"], t: "redirect_uri_mismatch", k: "redirect_uri_mismatch リダイレクト 400 エラー", body: () => [box("", "Google Cloud のクライアントの「承認済みのリダイレクト URI」を、これと一字一句同じにします（最後に / を付けない）。"), code(`${urlOr()}/auth/callback`, placeholders()), box("", "保存してから数分かかることがあります。")] },
   { id: "blocked", g: "g", c: ["#ff3b30", "#c22c24"], t: "アクセスをブロック・このアプリは確認されていません", k: "access_denied 403 ブロック テストユーザー 確認されていません 本番", body: () => [steps(`${link("https://console.cloud.google.com/auth/audience", "対象")} を開く`, "「アプリを公開」→ 本番環境にする")] },
@@ -491,8 +491,14 @@ const TROUBLES = [
   { id: "invitee", g: "miru", c: ["#30b45a", "#2a9f4f"], t: "招待した人が入れない", k: "招待 相手 入れない Gmail 点", body: () => [box("", "相手が、招待したメールの Google アカウントでログインしているか確かめます。Gmail は点の有無が違っても同じ人として入れます。")] },
   { id: "quota", g: "miru", c: ["#ff9f0a", "#ff6a3d"], t: "容量の上限（9.0GB）を超えます", k: "402 容量 上限 9GB quota 足りない", body: () => [box("", "動画のパネルで前の版を左にスワイプして消すと空きます。超えた分を払ってよいなら、上限を上げます（10GB を超えた分は 1GB あたり月数円）。"), code(setupCmd("quota --gb 30"))] },
   { id: "ps", g: "pc", c: ["#0a72e8", "#3d9bff"], t: "このシステムではスクリプトの実行が無効", k: "PowerShell npx.cmd ExecutionPolicy スクリプト 無効 Windows", body: () => [box("", "Windows の PowerShell で npx を使うと止まることがあります。npx.cmd を使います。"), code("cd $HOME\\MIRU\nnpx.cmd wrangler secret put GOOGLE_CLIENT_SECRET")] },
-  { id: "node", g: "pc", c: ["#30b45a", "#5fd07f"], t: "Node.js 22 以上が要ります・node が見つかりません", k: "node command not found Node.js バージョン", body: () => [steps(`${link("https://nodejs.org/", "nodejs.org")} から LTS を入れる`, "ターミナルを開き直して node -v")] },
+  { id: "codexcfg", g: "pc", c: ["#0f172a", "#475569"], t: "Codex が config.toml を読めない", k: "Codex config.toml TOML 読めない 壊れた 設定", body: () => [box("", "10/25 より前の画面の Codex 用コマンドを 2 回貼ると、設定が壊れることがありました。config.toml を開き、行の途中から始まる [（\"gpt-5\"[projects.\"…\"] のような所）の前で改行してから、新しいコマンドを貼り直します。"), code(W() ? "notepad $HOME\\.codex\\config.toml" : "open -e ~/.codex/config.toml")] },
+  { id: "oldkey", g: "pc", c: ["#3d9bff", "#7a5cff"], t: "Claude Code が前の鍵のまま", k: "Claude Code 鍵 401 local remove 前の鍵 違う", body: () => [box("", "0.2.2 までの画面のコマンドは、そのとき開いていたフォルダーだけにつないでいました。そのフォルダーでこれを動かしてから、新しいコマンドを貼ります。"), code("claude mcp remove -s local miru")] },
+  { id: "node", g: "pc", c: ["#30b45a", "#5fd07f"], t: "Node.js 22.12 以上が要ります・node が見つかりません", k: "node command not found Node.js バージョン", body: () => [steps(`${link("https://nodejs.org/", "nodejs.org")} から LTS を入れる`, "ターミナルを開き直して node -v")] },
   { id: "conflict", g: "miru", c: ["#7a5cff", "#5e5ce6"], t: "同じ所でぶつかったので、まだ公開していません", k: "update ぶつかった 6 conflict resolved", body: () => [box("", "自分で直した所と新しい版が同じ所を変えていました。AI に「ぶつかった所を直して公開して」と頼むと、両方を入れてから公開します。"), code(setupCmd("deploy --resolved"))] },
+  { id: "older", g: "miru", c: ["#8a94a6", "#5b6577"], t: "入れようとしている MIRU は、いま入っているものより古いです", k: "古い 8 update lite 新しく force-older", body: () => [box("", "Claude Code と Codex で lite を別々に入れていると起こります（入れ替えていません）。AI動画編集 lite を新しくしてから、もう一度 update します。"), code(pluginUpdate())] },
+  { id: "nobase", g: "miru", c: ["#5e5ce6", "#7a5cff"], t: "入れた版の写しが無いので、見分けられません", k: "miru-upstream 写し force 6 前の版 見分け", body: () => [box("", "前の版の道具で立てた MIRU です（まだ何も変えていません）。自分で直した所が無ければ、--force を付けてもう一度動かします（違うファイルは backups に控えてから入れ替えます）。直した所があれば、入れ替えたあとに AI に入れ直してもらいます。"), code("node <新しい MIRU の場所>/tools/setup.mjs update --force")] },
+  { id: "nobackup", g: "miru", c: ["#30b45a", "#2a9f4f"], t: "表を足す前の控えを取れませんでした", k: "控え backup no-backup 取れない", body: () => [box("", "公開はしていません。通信を確かめて、同じコマンドをもう一度動かします。控えなしで進めるなら --no-backup を付けます。")] },
+  { id: "ready", g: "miru", c: ["#ff9f0a", "#ffb340"], t: "〜はもう上げ終わっています", k: "409 上げ終わって 版 名前 上げ直す", body: () => [box("", "上げ終わった版は、同じ名前で上げ直せません。直した版は v3-2 のように別の名前で上げます（AI に「別の版の名前で上げて」と頼めます）。")] },
   { id: "tsc", g: "miru", c: ["#ff3b30", "#ff6a3d"], t: "型の確認で止まりました", k: "tsc 型 deploy エラー 直した", body: () => [box("", "自分用に直した所に間違いがあります（公開はしていません）。AI にエラーを見せて「直して公開して」と頼みます。")] },
   { id: "aiformat", g: "miru", c: ["#8a94a6", "#5b6577"], t: "修正指示の「AI で整える」が働かない", k: "AI 整える Workers AI 働かない", body: () => [box("", "Workers AI の無料の範囲を超えたか、使っている AI のモデルが有料プラン向けです。文はそのまま残るので、修正には困りません。")] },
   { id: "issue", g: "help", c: ["#0f172a", "#475569"], t: "それでも直らない", k: "Issues 問い合わせ 質問 バグ", body: () => [box("", "通し確認の結果を添えて、GitHub の Issues に書いてください（テンプレートがあります）。"), openBtn(`https://github.com/${LITE}/issues/new/choose`, "Issues に書く"), box("貼らないもの", "シークレットと鍵（GOCSPX-・miru_ で始まる値）。", "warn")] },
@@ -501,7 +507,7 @@ const TROUBLES = [
 // ── そのあと ──
 const AFTERS = [
   { id: "update", ic: "↻", g: "miru", c: ["#3d9bff", "#7a5cff"], t: "新しい版にする", d: "設定の「この MIRU」に出たら", body: () => [
-    box("", "AI にこう頼むと、lite を更新してから MIRU を入れ替えます。データと設定はそのまま、更新の前に控えを取ります。"),
+    box("", "AI にこう頼むと、lite を更新してから MIRU を入れ替えます。データと設定はそのままです。表を足す版のときは、その前に控えを取ります（取れなければ止まります）。"),
     code("AI動画編集 lite と MIRU を新しい版にして"),
     lbl("自分で動かすなら"), code(pluginUpdate()), code(`node <新しい MIRU の場所>/tools/setup.mjs update`),
     box("直した所は？", "残ります。同じ所を新しい版も変えていたときだけ止まり、どのファイルかを言います。"),
@@ -520,7 +526,7 @@ const AFTERS = [
   ] },
   { id: "backup", ic: "⇩", g: "miru", c: ["#30b45a", "#2a9f4f"], t: "控えを取る", d: "文字のデータ（D1）", body: () => [
     code(setupCmd("backup")),
-    box("", `${home()}${W() ? "\\backups" : "/backups"} に入ります。新しい版にするときは自動で取ります。動画の元は、手元の案件フォルダーにあります。`),
+    box("", `${home()}${W() ? "\\backups" : "/backups"} に入ります。表を足す版にするときは自動で取ります。動画の元は、手元の案件フォルダーにあります。`),
   ] },
   { id: "quit", ic: "×", g: "help", c: ["#8a94a6", "#5b6577"], t: "やめる", d: "Cloudflare と Google から消す", body: () => [
     steps("控えを取る", "Cloudflare のダッシュボードで、Workers & Pages の miru・D1 の miru・R2 の miru-media を消す（R2 は中を空にしてから。多いときはライフサイクル ルールで 1 日で消してから）", "Google Cloud の MIRU のプロジェクトを消す", `${home()} と ${cfg()} を消す`),

@@ -7,9 +7,10 @@
 **初回の準備:** `~/.config/miru/url` が無ければ、まだ MIRU が無い。利用者が MIRU を使うと決めたら、`miru-setup` スキル（Claude Code は `/ai-video-editing-lite:miru-setup`、Codex は `$miru-setup`）の手順で立てる。立てたあと:
 1. 利用者が自分の MIRU を開いて Google でログイン。
 2. 「設定 → Claude Code・Codex とつなぐ」で鍵を作る。
-3. 画面に出るコマンドを利用者がターミナルに貼る（Claude Code 用・Codex 用・miru_sync 用。miru_sync 用は `~/.config/miru/token` と `~/.config/miru/url` を置く）。鍵を AI に見せてもらう必要はない。
+3. 画面に出るコマンドを利用者がターミナルに貼る（「コマンドをコピー」が Claude Code 用、「Mac 用をコピー」「Windows 用をコピー」が Codex 用、「上げる道具用をコピー（Mac／Windows）」が miru_sync.py 用。最後のものは `~/.config/miru/token` と `~/.config/miru/url` を置く）。鍵を AI に見せてもらう必要はない。
 
-鍵は 1 年で切れる。切れたら同じ手順で作り直す（Claude Code は先に `claude mcp remove -s user miru`。Codex の設定と上げる道具の鍵は、画面のコマンドで置き換わる）。
+鍵は 1 年で切れる。切れたら同じ手順で作り直す（Claude Code は先に `claude mcp remove -s user miru`。0.2.2 までの画面のコマンドでつないだフォルダーでは `claude mcp remove -s local miru` も。Codex の設定と上げる道具の鍵は、画面のコマンドで置き換わる）。
+この鍵（作業用）では、消す・招待する・鍵を作ることはできず、上げ終わった版を同じ名前で上げ直すこともできない（409。直した版は `v3-2` のように別の名前で上げる）。
 
 **上げる:**
 ```

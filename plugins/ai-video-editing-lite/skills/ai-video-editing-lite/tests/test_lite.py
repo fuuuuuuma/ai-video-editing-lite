@@ -133,5 +133,34 @@ class MiruVersion(unittest.TestCase):
         self.assertIn('setup.mjs', miru_sync.version_note(light(b['build'] - 1)))
         self.assertEqual(miru_sync.version_note({'ok': True, 'edition': 'personal', 'version': {'build': 0}}), '')   # 個人用の MIRU には言わない
 
+class Utf8Relaunch(unittest.TestCase):
+    """Windows で venv の python を UTF-8 モードで起動し直す所（setup.py の UTF8_MODULE）。AIVE_FORCE_UTF8 でほかの OS でも試す"""
+    @classmethod
+    def setUpClass(cls):
+        import setup
+        venv = Path(tempfile.mkdtemp(prefix='aive-utf8-')) / 'venv'
+        subprocess.run([sys.executable, '-m', 'venv', '--without-pip', str(venv)], check=True)
+        cls.py = venv / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
+        site = subprocess.run([str(cls.py), '-c', 'import sysconfig; print(sysconfig.get_paths()["purelib"])'],
+                              capture_output=True, text=True, check=True).stdout.strip()
+        setup.put_utf8(Path(site))
+
+    def go(self, code, **extra):
+        env = {k: v for k, v in os.environ.items() if k not in ('PYTHONUTF8', 'PYTHONIOENCODING', 'AIVE_UTF8_REEXEC')}
+        return subprocess.run([str(self.py), '-c', code], capture_output=True, text=True, encoding='utf-8', errors='replace',
+                              env={**env, 'AIVE_FORCE_UTF8': '1', **extra})
+
+    def test_relaunch_in_utf8_mode_and_keep_exit_code(self):
+        r = self.go('import sys; print(sys.flags.utf8_mode); sys.exit(3)')
+        self.assertEqual((r.stdout.strip(), r.returncode), ('1', 3), r.stderr)
+
+    def test_says_so_and_goes_on_when_it_cannot_relaunch(self):
+        broken = Path(tempfile.mkdtemp(prefix='aive-utf8-broken-'))
+        (broken / 'subprocess.py').write_text('raise ImportError("broken on purpose")\n', encoding='utf-8')
+        r = self.go('import sys; print(sys.flags.utf8_mode)', PYTHONPATH=str(broken))
+        self.assertEqual((r.stdout.strip(), r.returncode), ('0', 0), r.stderr)     # 前は何も言わずに 1 で終わっていた
+        self.assertIn('aive_utf8:', r.stderr)
+
+
 if __name__ == '__main__':
     unittest.main()

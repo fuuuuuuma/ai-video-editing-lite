@@ -45,7 +45,7 @@ item(bool(url), '自分の MIRU（確認サイトに上げるとき）', url or 
      'miru-setup（Claude Code は /ai-video-editing-lite:miru-setup、Codex は $miru-setup）で自分の Cloudflare に立てる', warn=True)
 tok = os.environ.get('MIRU_TOKEN') or ((Path.home() / '.config/miru/token').read_text().strip() if (Path.home() / '.config/miru/token').exists() else '')
 item(tok.startswith('miru_'), 'MIRU の鍵（確認サイトに上げるとき）', 'あり' if tok.startswith('miru_') else 'なし',
-     '自分の MIRU に Google でログイン →「設定 → Claude Code・Codex とつなぐ」で鍵を作り、画面のコマンドで ~/.config/miru/token と url を置く', warn=True)
+     '自分の MIRU に Google でログイン →「設定 → Claude Code・Codex とつなぐ」→「鍵を作る」→「上げる道具用をコピー（Mac／Windows）」を押してターミナルに貼る', warn=True)
 if url and tok.startswith('miru_'):
     import miru_sync
     h = miru_sync.site_version()

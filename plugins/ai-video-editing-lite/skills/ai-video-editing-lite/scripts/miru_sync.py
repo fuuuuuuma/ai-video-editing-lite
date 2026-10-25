@@ -63,7 +63,7 @@ def _site():
 
 SITE = _site()
 NO_SITE = ('MIRU の場所がありません: 自分の MIRU を立ててから（このスキルの miru/SETUP.md、Claude Code は /ai-video-editing-lite:miru-setup、'
-           'Codex は $miru-setup）、サイトの「設定 → Claude Code・Codex とつなぐ」のコマンドで ~/.config/miru/url と token を置いてください')
+           'Codex は $miru-setup）、サイトの「設定 → Claude Code・Codex とつなぐ」→「鍵を作る」→「上げる道具用をコピー（Mac／Windows）」を押して、ターミナルに貼ってください（~/.config/miru/url と token が置かれます）')
 CHUNK = 10            # seconds per audio piece
 RATE = 48000
 PART = 50 * 1024 * 1024
@@ -123,7 +123,7 @@ def token():
     if not t and f.exists():
         t = f.read_text().strip()
     if not t.startswith('miru_'):
-        raise SystemExit('MIRU の鍵がありません: サイトの「設定 → Claude Code・Codex とつなぐ」で作り、~/.config/miru/token に置いてください')
+        raise SystemExit('MIRU の鍵がありません: サイトの「設定 → Claude Code・Codex とつなぐ」→「鍵を作る」→「上げる道具用をコピー（Mac／Windows）」を押して、ターミナルに貼ってください')
     return t
 
 
@@ -155,7 +155,7 @@ def call(method, path, body=None, data=None, ctype=None, headers=None):
                 time.sleep(min(60, wait) + random.random())
                 continue
             if e.code == 401:
-                msg = '鍵が使えません（期限切れか、消されています）。サイトの「設定 → Claude Code・Codex とつなぐ」で作り直し、~/.config/miru/token に置いてください'
+                msg = '鍵が使えません（期限切れか、消されています）。サイトの「設定 → Claude Code・Codex とつなぐ」→「鍵を作る」で作り直し、「上げる道具用をコピー（Mac／Windows）」を押してターミナルに貼ってください'
             elif e.code == 402:
                 msg = f'容量が足りません: {msg}'
             raise MiruError(f'{method} {path.split("?")[0]}: {e.code} {msg}', e.code)
@@ -314,7 +314,12 @@ def put_blob(case, vid, sha, src):
         call('PUT', f'{base}?{urllib.parse.urlencode({"type": ct})}', data=src.read_bytes(), ctype=ct)
         return size
     resume = case / '.akari/cache/miru-upload' / f'{hashlib.sha256((SITE + vid).encode()).hexdigest()[:12]}-{sha[:24]}.json'
-    multipart(f'{base}/mpu', urllib.parse.urlencode({'type': ct, 'size': size}), src, resume)
+    try:
+        multipart(f'{base}/mpu', urllib.parse.urlencode({'type': ct, 'size': size}), src, resume)
+    except MiruError as e:
+        if e.code != 409:
+            raise
+        # もう置いてある（同時に上げた・前の返事が届かなかった）。つながったかは put_shared が確かめる
     return size
 
 

@@ -39,7 +39,7 @@ MIRU ライトは、AI動画編集 lite が作った動画のプレビューを�
 ## つなぐ
 
 利用者が自分の MIRU を開いてログイン →「設定 → Claude Code・Codex とつなぐ」→「鍵を作る」→ 画面のコマンドを自分のターミナルに貼る。
-- Claude Code: 「コマンドをコピー」（`claude mcp add -s user …`。どのフォルダーからでも使える）。前に miru をつないでいたら、先に `claude mcp remove -s user miru`。
+- Claude Code: 「コマンドをコピー」（`claude mcp add -s user …`。どのフォルダーからでも使える）。前に miru をつないでいたら、先に `claude mcp remove -s user miru`。0.2.2 までの画面のコマンドでつないでいたら、そのとき開いていたフォルダーで `claude mcp remove -s local miru` も（そのフォルダーだけの古い鍵が先に使われる）。
 - Codex: 「Mac 用をコピー」か「Windows 用をコピー」（`~/.codex/config.toml` の `[mcp_servers.miru]` を置き換える）。Codex を開き直すとつながる。
 - 動画を上げる道具: 「上げる道具用をコピー（Mac）」か「（Windows）」（`~/.config/miru/token` と `~/.config/miru/url` を置く。鍵はコマンドに入っている）。
 - この鍵（作業用）では、消す・招待する・鍵を作ることはできない（403「この鍵ではできません」）。上げ終わった版を同じ名前で上げ直すこともできない（409。別の版の名前で上げる）。頼まれたら、利用者に MIRU の画面でしてもらう。
@@ -55,7 +55,8 @@ MIRU ライトは、AI動画編集 lite が作った動画のプレビューを�
    - Codex: `codex plugin marketplace upgrade ai-video-editing-lite` のあと `codex plugin add ai-video-editing-lite@ai-video-editing-lite`
    （Windows の PowerShell 5.1 は `&&` を使えないので、1 行ずつ動かす）
 2. **新しい** lite の `miru/tools/setup.mjs` で `node <新しい SETUP> update`（更新は次のチャットから効くので、いまのチャットでは新しいプラグインの場所を探して使う。`~/MIRU/tools/setup.mjs` からは update できない）。表を足すときは、その前に D1 の控えを `~/MIRU/backups/` に取る（取れなければ止まる。控えなしで進めるのは利用者が了承したときだけ `--no-backup`）。終わりのコード **8** は、入れようとしている MIRU が今より古い（Claude Code と Codex で lite の版が違う）。新しい方の lite から動かす。
-3. 終わりのコード **6**（ぶつかった）なら、出た各ファイルで `~/MIRU/.miru-upstream-prev/<f>`（前の版）→ `~/MIRU/.miru-upstream/<f>`（新しい版）の違いを読み、それを `~/MIRU/<f>`（利用者が直したもの）に入れる。利用者が直した所は消さない。終わったら `node $SETUP deploy --resolved`。直し終えるまで update・start・deploy は 6 で止まる（新しい版の変更が消えないように）。
+3. 終わりのコード **6** で「入れた版の写し（.miru-upstream）が無い」と出たら、ぶつかったのではなく前の版の道具で立てた MIRU（まだ何も変えていない）。利用者に自分で直した所があるかを聞き、無ければ `--force` を付けて update をもう一度（違うファイルは `~/MIRU/backups/` に控えてから入れ替わる）。あれば、入れ替えたあとに控えを見て入れ直す。
+   それ以外の **6**（ぶつかった）なら、出た各ファイルで `~/MIRU/.miru-upstream-prev/<f>`（前の版）→ `~/MIRU/.miru-upstream/<f>`（新しい版）の違いを読み、それを `~/MIRU/<f>`（利用者が直したもの）に入れる。利用者が直した所は消さない。終わったら `node $SETUP deploy --resolved`。直し終えるまで update・start・deploy は 6 で止まる（新しい版の変更が消えないように）。
 4. `node $SETUP check` で「公開されている版」が新しい番号になったことを確かめる。
 
 ## 自分用に直す（利用者の MIRU だけが変わる）
@@ -65,7 +66,7 @@ MIRU ライトは、AI動画編集 lite が作った動画のプレビューを�
    - `wrangler.jsonc` は手で直さない（`setup.mjs` が作り直す）。設定は `setup.mjs` のオプションで。
    - 表を変えるときは `migrations/` に新しい番号のファイルを足す（前のファイルは書き換えない）。
    - 秘密の値はファイルに書かない。
-2. 手元で見たいとき: `cd ~/MIRU && npm run build && npm run worker` → http://localhost:8790/auth/dev?email=owner@example.com で仮ログイン（`wrangler.dev.jsonc`、本番には効かない）。
+2. 手元で見たいとき: `cd ~/MIRU && npx wrangler d1 migrations apply miru --local -c wrangler.dev.jsonc && npm run build && npm run worker`（表を作るのは 1 回目だけ。Windows の PowerShell は `cd $HOME\MIRU` のあと `npx.cmd …`・`npm.cmd run build`・`npm.cmd run worker` を 1 行ずつ）→ http://localhost:8790/auth/dev?email=owner@example.com で仮ログイン（`wrangler.dev.jsonc`、本番には効かない）。
 3. `node $SETUP deploy`（型の確認 → 表 → 公開）。型の確認で止まったら直してからもう一度。
 4. 直したファイルの一覧は `node $SETUP changes`。新しい版にしても残る（上の「新しい版にする」）。
 
