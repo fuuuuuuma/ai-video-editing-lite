@@ -212,6 +212,16 @@ class MiruMultipartResume(unittest.TestCase):
         self.assertIn(('POST', '/p/new/complete'), calls)
 
 
+class MiruDrawing(unittest.TestCase):
+    def test_a_drawn_mark_in_words(self):
+        import miru_sync
+        d = {'v': 1, 's': [{'c': '#ff3b30', 'w': 6, 'p': [700, 100, 900, 250]}, {'c': '#ffd60a', 'w': 6, 'p': [800, 150]}]}
+        self.assertEqual(miru_sync.drawing_hint(d), '映像に赤・黄の線 2 本（画面の右上あたり。横 70〜90%・縦 10〜25%）')
+        self.assertIn('真ん中', miru_sync.drawing_hint({'s': [{'c': '#0a84ff', 'p': [450, 450, 550, 550]}]}))
+        self.assertIn('下の中央', miru_sync.drawing_hint({'s': [{'c': '#ffffff', 'p': [400, 800, 600, 900]}]}))
+        self.assertIsNone(miru_sync.drawing_hint({'s': []}))
+
+
 class MiruVersion(unittest.TestCase):
     def test_bundled_miru_and_version_note(self):
         # 0.2.1: lite に入っている MIRU ライトの版（tools/release-light.mjs が書く）と、立てた MIRU が古いときの案内
