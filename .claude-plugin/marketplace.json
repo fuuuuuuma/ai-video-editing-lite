@@ -11,7 +11,7 @@
       "name": "ai-video-editing-lite",
       "source": "./plugins/ai-video-editing-lite",
       "description": "自分のチャンネルの編集の作風を学んで覚え、撮影素材からカット・字幕・強調入りのMP4を作る。確認サイトMIRUで修正。",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "category": "creative"
     }
   ]

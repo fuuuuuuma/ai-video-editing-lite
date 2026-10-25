@@ -82,7 +82,8 @@ const INSTRUCTIONS = {
     "スキルが無い・miru_sync.py が見つからないときは install_editor で入れる（この MCP の鍵だけで入り、上げるときも同じ鍵を使う）。" +
     "編集の前に、どのチャンネルの動画かを list_channels で決め、そのチャンネルのトンマナと採用済みの強調デザインを get_channel_kit（スキルでは miru_sync.py kit-pull）で読み、採用済みのものだけを使う。" +
     "トンマナがまだ無いチャンネルでも、カットだけの仮編集はできる。" +
-    "できたら miru_sync.py publish でそのチャンネルに上げ、preview_link を送る。修正は get_review で読み、reply_note で返事する。",
+    "できたら miru_sync.py publish でそのチャンネルに上げ、preview_link を送る。修正は get_review で読み、reply_note で返事する。" +
+    "get_review のいちばん新しい見られる版に approved_by があり、そのあとの未対応の修正指示が無ければ承認済み。書き出しと、完成版を MIRU に置く（miru_sync.py deliver）かは利用者に聞いてから。",
   light: "MIRU ライトは、AI動画編集 lite（ai-video-editing-lite）が作った動画を見て修正指示を書く確認サイト（利用者が自分の Cloudflare に立てたもの）。" +
     "素材の編集を頼まれたら、スキル ai-video-editing-lite で編集する（Claude Code は /ai-video-editing-lite:ai-video-editing-lite、Codex は $ai-video-editing-lite）。" +
     `スキルが無いときは、利用者に自分のターミナルで入れてもらう（Claude Code: claude plugin marketplace add ${LITE_REPO} → claude plugin install ai-video-editing-lite@ai-video-editing-lite。` +
@@ -90,6 +91,7 @@ const INSTRUCTIONS = {
     "作風（字幕・強調の見た目）は lite がこの PC に覚えている。できた動画は lite の scripts/miru_sync.py publish で上げ、preview_link を送る。" +
     "修正は get_review と get_edits で読み、次の版を作ったら reply_note で返事する。" +
     "get_review のいちばん新しい見られる版に approved_by があり、そのあとの未対応の修正指示が無ければ、その版は承認済み（見る人の OK）。完成版を書き出すかを利用者に聞いてから、lite の手順で書き出す。" +
+    "書き出した完成版を相手に渡すときは、利用者に聞いてから lite の scripts/miru_sync.py deliver で、承認された版に置く（容量を使う。渡し終えたら管理者が MIRU の画面で消せる）。" +
     "MIRU そのものを立てる・つなぐ・新しい版にする・自分用に直すときは、スキル miru-setup（Claude Code は /ai-video-editing-lite:miru-setup、Codex は $miru-setup）を使う。",
 };
 

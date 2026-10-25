@@ -35,7 +35,7 @@ MIRU はあなたの Cloudflare で動くあなたのものなので、好きに
 |---|---|
 | `index.html`・`src/main.ts`・`src/ui.ts`・`src/style.css` | ホーム・タスク・設定などの画面 |
 | `review.html`・`src/review/` | 確認画面（動画・字幕・修正指示・手直し） |
-| `worker/` | サーバー（`index.ts` 入口・`auth.ts` Google ログイン・`api.ts` API・`mcp.ts` Claude Code / Codex とのつなぎ・`notify.ts` Slack・Discord への通知） |
+| `worker/` | サーバー（`index.ts` 入口・`auth.ts` Google ログイン・`api.ts` API・`mcp.ts` Claude Code / Codex とのつなぎ・`notify.ts` Slack・Discord への通知・`activity.ts` 履歴） |
 | `migrations/` | 表（D1） |
 | `public/_headers` | 画面に付ける守りのヘッダー |
 | `tools/setup.mjs` | 立てる・直したものを公開する・新しい版にする・確かめる道具（`tools/setup.test.mjs` がその検査） |

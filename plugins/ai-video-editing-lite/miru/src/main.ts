@@ -9,7 +9,37 @@ type Me = { user: { id: string; email: string; name: string; picture: string }; 
 type Channel = { id: string; name: string; color: string; role: string; videos: number; open: number; mine?: number };
 const gb = (n: number) => (n >= 1e15 ? "上限なし" : n < 1024 ** 3 ? `${Math.round(n / 1024 ** 2)}MB` : `${(n / 1024 ** 3).toFixed(1)}GB`);
 const day = (t: number) => new Date(t).toLocaleDateString("ja-JP");
-type Video = { id: string; channel_id: string; title: string; status: string; thumb: string | null; latest: string | null; open: number; updated_at: number };
+type Video = { id: string; channel_id: string; title: string; status: string; thumb: string | null; latest: string | null; open: number; updated_at: number; due_at?: number | null };
+type Activity = { id: number; at: number; who: string | null; kind: string; detail: string; restorable: boolean };
+/** 期限（日本の日付）。input[type=date] の値と、カードに出す短い形 */
+const dueDay = (t: number) => new Date(t + 9 * 3600_000).toISOString().slice(0, 10);
+const dueLabel = (v: Video) => {
+  if (!v.due_at) return "";
+  const late = v.status !== "done" && Date.now() > v.due_at + 86_400_000;
+  const [, m, d] = dueDay(v.due_at).split("-").map(Number);
+  return `<span class="small" style="font-weight:700;color:${late ? "var(--bad)" : "var(--ink2)"}">${late ? "期限切れ " : "期限 "}${m}/${d}</span>`;
+};
+/** 履歴の 1 行の言葉 */
+const actText = (a: Activity) => {
+  const d = a.detail ? esc(a.detail) : "（中身は消しました）";     // 管理者が中身を消した指示の履歴（2026-10-25）
+  switch (a.kind) {
+    case "ready": return `${d} を上げました`;
+    case "note": return `修正指示: ${d}`;
+    case "reply": return `返事: ${d}`;
+    case "done": return `済にしました: ${d}`;
+    case "reopen": return `未対応に戻しました: ${d}`;
+    case "note_deleted": return a.detail ? `修正指示を消しました: ${d}` : "修正指示を消しました（中身も消しました）";
+    case "note_restored": return `修正指示を戻しました: ${d}`;
+    case "approve": return `${d} を承認しました`;
+    case "unapprove": return `${d} の承認を取り消しました`;
+    case "unapprove_changed": return `${d} の中身が変わったので、承認を外しました`;
+    case "status": return `状態を「${STATUS[a.detail] ?? d}」にしました`;
+    case "due": return a.detail ? `期限を ${d} にしました` : "期限を外しました";
+    case "final": return `${d} の完成版を置きました`;
+    case "final_deleted": return `${d} の完成版を消しました`;
+    default: return d;
+  }
+};
 type Note = { id: string; video_id: string; video_title?: string; version: string; author: string; frame: number | null; tc: string | null; text: string; status: string; category: string; reply: string | null; updated_at: number };
 
 let me: Me | null = null;
@@ -106,14 +136,14 @@ async function pageDoc(kind: "privacy" | "terms") {
   const closed = !!site.invite_only;
   const sec = (t: string, d: string) => `<h2>${t}</h2><p class="small">${d}</p>`;
   const body = kind === "privacy" ? `
-    ${sec("集める情報", "Google でログインしたときの名前・メールアドレス・プロフィール写真、修正指示と画面での手直し、版を承認した人と時刻、チャンネルの管理者が上げた確認用の動画・画像・音、ログインを保つための cookie。確認画面で再生がうまくいかなかったときは、その記録（ブラウザの種類・回線の種類と速さ・つながった Cloudflare の拠点・読み込みにかかった時間など。メールアドレスは入れません）。")}
+    ${sec("集める情報", "Google でログインしたときの名前・メールアドレス・プロフィール写真、修正指示と画面での手直し、版を承認した人と時刻、動画の期限、誰がいつ何をしたかの履歴、チャンネルに上げた確認用の動画・完成版の動画・画像・音、ログインを保つための cookie。確認画面で再生がうまくいかなかったときは、その記録（ブラウザの種類・回線の種類と速さ・つながった Cloudflare の拠点・読み込みにかかった時間など。メールアドレスは入れません）。")}
     ${sec("使い方", "ログインと、招待されたチャンネルの動画を見せること、修正指示と手直しを動画の制作に使うこと、再生の不具合を直すことだけに使います。広告には使いません。売ったり、第三者に渡したりしません（下の「通知」を除きます）。")}
     ${sec("置き場所", "Cloudflare（D1・R2）に置きます。ログインの印はそのままではなく SHA-256 で置きます。修正指示を読みやすく整える機能を使ったときは、その文を Cloudflare Workers AI で処理します。")}
     ${sec("通知", "チャンネルの管理者が通知の送り先（Slack か Discord）を決めたときだけ、新しい版・修正指示・返事・承認の知らせを、そこへ送ります。知らせには、チャンネル名・動画の題名・版の名前・修正指示と返事の文（一部）と時間の位置・書いた人や承認した人の Google の名前・このサイトへのリンクが入ります（メールアドレスは入れません）。")}
     ${closed ? sec("見られる人", "このサイトに入れるのは、持ち主と、持ち主がチャンネルに招待した人だけです。チャンネルの動画と指示は、そのチャンネルに招待された人だけが見られます。再生の記録は、そのチャンネルの「指示できる」人と管理者が見られます（だれの記録かは、メールアドレスから作った短い印で分けます）。")
     : sec("見られる人", "チャンネルを作った人と、その人が招待した人だけが、そのチャンネルの動画と指示を見られます。サイトの運営者にも、画面や道具から他の人のチャンネルを見る権限はありません（障害の調べものでデータベースに直接触れるときを除き、中身は見ません）。再生の記録は、そのチャンネルの「指示できる」人と管理者が見られます。")}
-    ${closed ? sec("残す期間", "上げ終わらなかったプレビューは 2 日で、再生の記録は 14 日で消えます。使われなくなったログインの印と、期限（1 年）の切れた鍵、招待を全部外された人の記録も消えます。")
-    : sec("残す期間", "上げ終わらなかったプレビューは 2 日で、再生の記録は 14 日で、無料の容量で使っている人の古い版（各動画の新しい 2 つより前で 30 日たったもの）は自動で消えます。使われなくなったログインの印と、期限（1 年）の切れた鍵も消えます。")}
+    ${closed ? sec("残す期間", "上げ終わらなかったプレビューは 2 日で、再生の記録は 14 日で消えます。使われなくなったログインの印と、期限（1 年）の切れた鍵、招待を全部外された人の記録も消えます。 動画ごとの履歴（誰がいつ何をしたか。消した修正指示の中身を含み、そこから戻せます）は新しい 500 件まで残り、動画を消すと一緒に消えます。履歴はそのチャンネルに招待された人が見られます（メールアドレスは管理者だけ）。消した修正指示の中身は、管理者が履歴から完全に消すこともできます。")
+    : sec("残す期間", "上げ終わらなかったプレビューは 2 日で、再生の記録は 14 日で、無料の容量で使っている人の古い版（各動画の新しい 2 つより前で 30 日たったもの）は自動で消えます。使われなくなったログインの印と、期限（1 年）の切れた鍵も消えます。 動画ごとの履歴（誰がいつ何をしたか。消した修正指示の中身を含み、そこから戻せます）は新しい 500 件まで残り、動画を消すと一緒に消えます。履歴はそのチャンネルに招待された人が見られます（メールアドレスは管理者だけ）。消した修正指示の中身は、管理者が履歴から完全に消すこともできます。")}
     ${sec("消す", "チャンネルは設定の画面から、動画・版ごと消せます。アカウントごと消したいときは、下の連絡先までお知らせください。")}
     ${sec("連絡先", esc(contact))}` : `
     ${closed ? sec("このサイト", `MIRU${site.edition === "light" ? " ライト" : ""} は、動画のプレビューを上げ、招待した人と一緒に見て修正指示を入れるためのサイトです。このサイトの持ち主（下の連絡先）が自分の Cloudflare で動かしています。チャンネルを作れるのは持ち主だけで、ほかの人は招待されたチャンネルだけを見られます。`)
@@ -174,7 +204,7 @@ function drawVideos(videos: Video[], role: string, ch: Channel) {
     const card = h(`<div class="vcard glass" style="animation-delay:${Math.min(i, 8) * 0.035}s" tabindex="0" role="button" aria-label="${esc(v.title)}">
       <div class="thumb">${v.thumb ? `<img src="/api/videos/${encodeURIComponent(v.id)}/thumb" alt="" loading="lazy">` : esc(v.title.slice(0, 1))}</div>
       <div class="vmeta"><div class="vtitle">${esc(v.title)}</div>
-        <div class="vsub"><span class="pill st-${v.status}">${STATUS[v.status]}</span>${v.latest ? `<span>${esc(v.latest)}</span>` : ""}<span>${ago(v.updated_at)}</span></div></div>
+        <div class="vsub"><span class="pill st-${v.status}">${STATUS[v.status]}</span>${v.latest ? `<span>${esc(v.latest)}</span>` : ""}${dueLabel(v)}<span>${ago(v.updated_at)}</span></div></div>
       ${v.open ? `<span class="count">${v.open}</span>` : ""}</div>`);
     card.addEventListener("click", () => videoSheet(v, role));
     card.addEventListener("keydown", (e) => { if ((e as KeyboardEvent).key === "Enter") videoSheet(v, role); });
@@ -195,7 +225,9 @@ async function videoSheet(v: Video, role: string) {
     <div class="hstack" style="margin-bottom:14px"><span class="pill st-${v.status}">${STATUS[v.status]}</span><span class="small muted">${ago(v.updated_at)}に更新</span></div>
     <div id="vs">${skeleton.rows(2)}</div>`);
   try {
-    const d = await api<{ versions: { name: string; ready: number; created_at: number; bytes: number; note: string; approved_by: string | null; approved_at: number | null }[]; openNotes: number; role: string }>(`/api/videos/${encodeURIComponent(v.id)}`);
+    const d = await api<{ video: Video; versions: { name: string; ready: number; created_at: number; bytes: number; note: string; approved_by: string | null; approved_at: number | null }[]; openNotes: number; role: string;
+      activity?: Activity[]; final?: { version: string; size: number }[] }>(`/api/videos/${encodeURIComponent(v.id)}`);
+    v.due_at = d.video?.due_at ?? null;
     const ready = d.versions.filter((x) => x.ready);
     const cutOnly = (x: { note: string }) => /カットだけ/.test(x.note ?? "");     // トンマナが無いときの仮編集（字幕と強調はまだ）
     const box = $("#vs", s.body)!;
@@ -203,9 +235,75 @@ async function videoSheet(v: Video, role: string) {
       ${ready.length ? `<a class="btn primary wide" href="/v/${encodeURIComponent(v.id)}?ver=${encodeURIComponent(ready[0].name)}">${esc(ready[0].name)} を見る</a>${cutOnly(ready[0]) ? `<div class="small muted" style="margin:8px 2px 0">カットだけの仮編集です（字幕と強調はまだ）</div>` : ""}` : `<div class="glass card small muted">まだプレビューが上がっていません</div>`}
       ${d.openNotes ? `<div class="small" style="margin:10px 2px 0">未対応の修正指示 <b>${d.openNotes}</b> 件</div>` : ""}
       ${ready.length ? `<div id="vapr" style="margin-top:12px"></div>` : ""}
+      ${(d.final ?? []).map((f) => `<a class="btn wide" style="margin-top:10px" href="/m/${encodeURIComponent(v.id)}/${encodeURIComponent(f.version)}/final.mp4" download="${esc(v.title)}-${esc(f.version)}.mp4">完成版をダウンロード（${esc(f.version)}・${gb(f.size)}）</a>${role === "owner" ? `<button class="btn sm" style="margin-top:6px" data-final-del="${esc(f.version)}">${esc(f.version)} の完成版を消して ${gb(f.size)} 空ける</button>` : ""}`).join("")}
+      <h2>期限</h2>${role !== "viewer"
+        ? `<div class="hstack" style="flex-wrap:nowrap"><input type="date" id="vdue" style="flex:1;min-width:0" value="${v.due_at ? dueDay(v.due_at) : ""}" aria-label="期限"><button class="btn sm" id="vdueclr"${v.due_at ? "" : " hidden"}>外す</button></div>`
+        : `<div class="small">${v.due_at ? dueDay(v.due_at) : "決まっていません"}</div>`}
       ${role !== "viewer" ? `<h2>状態</h2><div class="seg" id="vst">${["editing", "review", "fixing", "done"].map((k) => `<button data-s="${k}" class="${v.status === k ? "on" : ""}">${STATUS[k]}</button>`).join("")}</div>` : ""}
       ${ready.length > 1 ? `<h2>前の版</h2><div class="list" id="vold"></div>` : ""}
+      ${d.activity?.length ? `<h2>履歴</h2><div class="list" id="vact"></div>` : ""}
       ${role === "owner" ? `<h2>管理</h2><button class="btn danger wide" id="vdel">この動画を消す</button>` : ""}`;
+    // 期限（日本の日付）。決める・外すと履歴に残る（2026-10-25）
+    const due = $("#vdue", box) as HTMLInputElement | null;
+    let savedDue = v.due_at ? dueDay(v.due_at) : "", dueTimer = 0;
+    const setDue = async (val: string) => {
+      clearTimeout(dueTimer);
+      if (val === savedDue) return;
+      if (val && !/^20\d{2}-\d{2}-\d{2}$/.test(val)) { toast("期限は 2000〜2099 年の日付で入れてください", "err"); if (due) due.value = savedDue; return; }
+      try { await api(`/api/videos/${encodeURIComponent(v.id)}`, { method: "PATCH", body: { due: val || null } }); }
+      catch (err) { toast((err as Error).message, "err"); if (due) due.value = savedDue; return; }
+      savedDue = val;
+      v.due_at = val ? Date.parse(`${val}T00:00:00+09:00`) : null;
+      $("#vdueclr", box)!.hidden = !val; toast(val ? `期限を ${val} にしました` : "期限を外しました"); pageHome(v.channel_id);
+    };
+    // キーボードで打つと 1 文字ごとに change が来る（2027 と打つと 0002→0020→0202→2027）。打ち終えるのを待つか、欄を離れたときに 1 回だけ送る（2026-10-25 の点検）
+    due?.addEventListener("change", () => { clearTimeout(dueTimer); dueTimer = window.setTimeout(() => void setDue(due.value), 900); });
+    due?.addEventListener("blur", () => { void setDue(due.value); });
+    $("#vdueclr", box)?.addEventListener("click", () => { due!.value = ""; void setDue(""); });
+    // 完成版を消す（管理者だけ）。渡し終えたら容量を空ける。確認用の動画は残る（2026-10-25。ライトは 9GB なので）
+    for (const b of box.querySelectorAll<HTMLButtonElement>("[data-final-del]")) b.addEventListener("click", async () => {
+      const ver = b.dataset.finalDel!;
+      if (!confirm(`${ver} の完成版を消しますか？確認用の動画は残ります。相手がダウンロードし終えてから消してください`)) return;
+      b.disabled = true;
+      try { await api(`/api/videos/${encodeURIComponent(v.id)}/versions/${encodeURIComponent(ver)}/final`, { method: "DELETE" }); } catch (err) { b.disabled = false; toast((err as Error).message, "err"); return; }
+      toast(`${ver} の完成版を消しました`); pageHome(v.channel_id);
+    });
+    // 履歴: 誰がいつ何をしたか。消した修正指示は「戻す」で戻せる（2026-10-25）
+    // 管理者は、消した指示の中身を履歴からも完全に消せる（電話番号などを書いて消したとき。2026-10-25 の点検）
+    const act = $("#vact", box);
+    const drawAct = (items: Activity[]) => {
+      if (!act) return;
+      act.innerHTML = "";
+      for (const a of items) {
+        const purge = a.kind === "note_deleted" && !!a.detail && role === "owner";
+        const row = h(`<div class="glass row-item"><div class="grow small"><div>${actText(a)}</div><div class="muted">${ago(a.at)}・${esc(a.who ?? "")}</div></div>${a.restorable && role !== "viewer" ? `<button class="btn sm" data-back>戻す</button>` : ""}${purge ? `<button class="btn sm" data-purge>完全に消す</button>` : ""}</div>`);
+        const back = $("[data-back]", row) as HTMLButtonElement | null;
+        back?.addEventListener("click", async () => {
+          back.disabled = true;
+          try { await api(`/api/videos/${encodeURIComponent(v.id)}/activity/${a.id}/restore`, { method: "POST" }); } catch (err) { back.disabled = false; toast((err as Error).message, "err"); return; }
+          toast("修正指示を戻しました"); back.remove(); pageHome(v.channel_id);
+        });
+        const del = $("[data-purge]", row) as HTMLButtonElement | null;
+        del?.addEventListener("click", async () => {
+          if (!confirm("この修正指示の中身を、履歴からも消しますか？戻せなくなります")) return;
+          del.disabled = true;
+          try { await api(`/api/videos/${encodeURIComponent(v.id)}/activity/${a.id}`, { method: "DELETE" }); } catch (err) { del.disabled = false; toast((err as Error).message, "err"); return; }
+          a.detail = ""; a.restorable = false; drawAct(items); toast("中身を消しました");
+        });
+        act.append(row);
+      }
+    };
+    drawAct(d.activity ?? []);
+    // 新しい 30 件より前も見られる（500 件まで）。前に消した指示を戻すときに（2026-10-25 の点検: 画面で戻せるのは 30 件の中だけだった）
+    if (act && (d.activity?.length ?? 0) >= 30) {
+      const more = h(`<button class="btn sm" style="margin-top:8px">前の履歴をもっと見る</button>`) as HTMLButtonElement;
+      more.addEventListener("click", async () => {
+        more.disabled = true;
+        try { drawAct((await api<{ items: Activity[] }>(`/api/videos/${encodeURIComponent(v.id)}/activity?limit=500`)).items); more.remove(); }
+        catch (err) { more.disabled = false; toast((err as Error).message, "err"); }
+      });
+      act.after(more);
+    }
     // 承認（「この版で OK」）: 誰がいつ出したかを残す。指示できる人以上が出せる（2026-10-24）
     const apr = $("#vapr", box);
     const drawApproval = () => {
@@ -220,7 +318,7 @@ async function videoSheet(v: Video, role: string) {
         x.approved_by = r.approved_by; x.approved_at = r.approved_at; v.status = "done"; drawApproval(); toast(`${x.name} を承認しました`); pageHome(v.channel_id);
       });
       $("#vunapr", apr)?.addEventListener("click", async () => {
-        if (!confirm(`${x.name} の承認を取り消しますか？`)) return;
+        if (!confirm(`${x.name} の承認を取り消しますか？置いた完成版があれば、それも消えます`)) return;
         await api(`/api/videos/${encodeURIComponent(v.id)}/versions/${encodeURIComponent(x.name)}/approve`, { method: "DELETE" });
         x.approved_by = null; x.approved_at = null; v.status = "review"; drawApproval(); toast("承認を取り消しました"); pageHome(v.channel_id);
       });
