@@ -22,7 +22,7 @@ codex plugin marketplace add fuuuuuuma/ai-video-editing-lite
 codex plugin add ai-video-editing-lite@ai-video-editing-lite
 ```
 
-インストール後は新しいチャットを開いて使います（Codex は `$ai-video-editing-lite` を付けて依頼）。初回は AI が準備（Python の環境・文字起こし・書体の取得、数分）を進めます。
+インストール後は新しいチャットを開いて使います（ふつうに頼めば使われます。名前で呼ぶなら Claude Code は `/ai-video-editing-lite:ai-video-editing-lite`、Codex は `$ai-video-editing-lite`）。初回は AI が準備（Python の環境・文字起こし・書体の取得、数分）を進めます。
 
 ## 最初の 1 回：作風を学ばせる
 
@@ -47,11 +47,11 @@ AI が文字起こしを全部読み、言い直し・「えー」などを切�
 
 MIRU ライトは、できた動画を見て修正指示を書き込むサイトです。**あなた自身の Cloudflare アカウントに、あなた専用の MIRU を立てて使います**（動画も修正指示もあなたの Cloudflare の中だけ。入れるのはあなたと、あなたが招待した人だけ）。
 
-- **導入ガイド（画面で見ながら進める）: https://fuuuuuuma.github.io/ai-video-editing-lite/** （同じものが [docs/index.html](docs/index.html)。スマホでも見られます）
+- **導入ガイド（画面で見ながら進める）: https://fuuuuuuma.github.io/ai-video-editing-lite/** （スマホでも見られます）
 - 立て方: AI に **Claude Code は `/ai-video-editing-lite:miru-setup`、Codex は `$miru-setup`** と送ると、AI が手順を進めます。あなたがするのは、ブラウザでの許可と Cloudflare・Google Cloud の設定、秘密の値の貼り付けだけです（20〜30 分）。
 - 詳しい手順・費用・困ったとき: [plugins/ai-video-editing-lite/miru/SETUP.md](plugins/ai-video-editing-lite/miru/SETUP.md)
 - 確かめる: AI に「MIRU を確かめて」と頼むと、サイト・Google の設定・この PC とのつながりを 1 つずつ確かめ、直す所を言います。
-- 費用: Cloudflare の無料の範囲で使えます（動画の置き場 R2 は 10GB まで無料、見られるたびの通信料はかかりません）。30 分の動画で 1 版目およそ 1GB、2 版目からは変わった分（数十 MB）だけ増えます。無料の範囲を超えないように、置いた量が 9GB になると止まります（上げることもできます）。
+- 費用: Cloudflare の無料の範囲で使えます（動画の置き場 R2 は 10GB まで無料、見られるたびの通信料はかかりません）。30 分の動画で 1 版目およそ 1GB、2 版目からは変わった分（数十 MB）だけ増えます。無料の範囲を超えないように、置いた量が 9GB になると止まります（上限は変えられます）。
 - Claude Code・Codex とは、MIRU の「設定 → Claude Code・Codex とつなぐ」に出るコマンドを貼るとつながります。
 - MIRU を使わず、このパソコンの中だけで確認することもできます（http://localhost:8765/）。
 - 0.1.x で使っていた共用の MIRU は、新しくチャンネルを作れません（今あるチャンネルはそのまま見られます）。新しい動画は自分の MIRU ライトに上げてください。
@@ -93,8 +93,12 @@ YouTube から取り込むのは、分析のための短い区間（低画質・
 ## 更新
 
 ```bash
-claude plugin marketplace update ai-video-editing-lite && claude plugin update ai-video-editing-lite@ai-video-editing-lite
-codex plugin marketplace upgrade ai-video-editing-lite && codex plugin add ai-video-editing-lite@ai-video-editing-lite
+# Claude Code
+claude plugin marketplace update ai-video-editing-lite
+claude plugin update ai-video-editing-lite@ai-video-editing-lite
+# Codex
+codex plugin marketplace upgrade ai-video-editing-lite
+codex plugin add ai-video-editing-lite@ai-video-editing-lite
 ```
 
 MIRU ライトを立てているなら、続けて AI に「MIRU を新しい版にして」と頼みます（MIRU の「設定 → この MIRU」にも、新しい版があると出ます）。何が変わったかは [CHANGELOG.md](CHANGELOG.md)。

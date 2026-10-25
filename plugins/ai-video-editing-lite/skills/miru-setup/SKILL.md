@@ -20,7 +20,7 @@ MIRU ライトは、AI動画編集 lite が作った動画のプレビューを�
 ## 立てる
 
 0. いまの様子: `node $SETUP status`。立っていれば（URL があり、`node $SETUP check` が通る）→「つなぐ」へ。
-1. Node.js 20 以上を確かめる（`node -v`）。無ければ https://nodejs.org の LTS を入れてもらう。
+1. Node.js 22.12 以上を確かめる（`node -v`。v20 では wrangler が動かない）。古ければ https://nodejs.org の LTS を入れてもらい、ターミナルを開き直す。
 2. 利用者に、MIRU にログインする Google アカウントのメールを聞く（`--owner`）。上の 1 の確認をとる。
 3. `node $SETUP start --owner <メール>` を動かす（数分。`~/MIRU` に写して npm install → Cloudflare のログイン → D1 → R2 → 表 → 公開）。ブラウザが開いたら「Allow」を押してもらう。
    止まったら、終わりのコードで決まった案内が出ている。利用者にしてもらい、**同じコマンドをもう一度**（作ったものはそのまま続きから進む）:
@@ -39,10 +39,10 @@ MIRU ライトは、AI動画編集 lite が作った動画のプレビューを�
 ## つなぐ
 
 利用者が自分の MIRU を開いてログイン →「設定 → Claude Code・Codex とつなぐ」→「鍵を作る」→ 画面のコマンドを自分のターミナルに貼る。
-- Claude Code: 1 行目（`claude mcp add …`）。
-- Codex: 「Mac 用をコピー」か「Windows 用をコピー」（`~/.codex/config.toml` に `[mcp_servers.miru]` を足す）。Codex を開き直すとつながる。
-- プレビューを上げる道具: 「鍵だけコピー」→ 画面のコマンド（`~/.config/miru/token` と `~/.config/miru/url` を置く）。
-- この鍵（作業用）では、消す・招待する・鍵を作るはできない（403「この鍵ではできません」）。頼まれたら、利用者に MIRU の画面でしてもらう。
+- Claude Code: 「コマンドをコピー」（`claude mcp add -s user …`。どのフォルダーからでも使える）。前に miru をつないでいたら、先に `claude mcp remove -s user miru`。
+- Codex: 「Mac 用をコピー」か「Windows 用をコピー」（`~/.codex/config.toml` の `[mcp_servers.miru]` を置き換える）。Codex を開き直すとつながる。
+- 動画を上げる道具: 「上げる道具用をコピー（Mac）」か「（Windows）」（`~/.config/miru/token` と `~/.config/miru/url` を置く。鍵はコマンドに入っている）。
+- この鍵（作業用）では、消す・招待する・鍵を作ることはできない（403「この鍵ではできません」）。上げ終わった版を同じ名前で上げ直すこともできない（409。別の版の名前で上げる）。頼まれたら、利用者に MIRU の画面でしてもらう。
 - 確かめる: `node $SETUP check` の「鍵で入れる」が ✓、または lite の `miru_sync.py version` が `reachable: true`。
 
 最初のチャンネルは、AI動画編集 lite が初めて上げるときに自動で作る。人に見せるときは「設定 → チャンネル → 招待する」→「招待した人に送る案内をコピー」を相手に送ってもらう（MIRU はメールを送らない）。
@@ -51,10 +51,11 @@ MIRU ライトは、AI動画編集 lite が作った動画のプレビューを�
 
 「AI動画編集 lite と MIRU を新しい版にして」「MIRU を新しい版にして」と言われたら（MIRU の設定の画面や `miru_sync.py publish` が「新しい版があります」と言ったときも）:
 1. lite を更新する（利用者のターミナルで動かしてもらうか、了承を得て動かす）:
-   - Claude Code: `claude plugin marketplace update ai-video-editing-lite && claude plugin update ai-video-editing-lite@ai-video-editing-lite`
-   - Codex: `codex plugin marketplace upgrade ai-video-editing-lite && codex plugin add ai-video-editing-lite@ai-video-editing-lite`
-2. **新しい** lite の `miru/tools/setup.mjs` で `node <新しい SETUP> update`（更新は次のチャットから効くので、いまのチャットでは新しいプラグインの場所を探して使う。`~/MIRU/tools/setup.mjs` からは update できない）。更新の前に D1 の控えを `~/MIRU/backups/` に取り、表を足して公開し直す。
-3. 終わりのコード **6**（ぶつかった）なら、出た各ファイルで `~/MIRU/.miru-upstream-prev/<f>`（前の版）→ `~/MIRU/.miru-upstream/<f>`（新しい版）の違いを読み、それを `~/MIRU/<f>`（利用者が直したもの）に入れる。利用者が直した所は消さない。終わったら `node $SETUP deploy --resolved`。
+   - Claude Code: `claude plugin marketplace update ai-video-editing-lite` のあと `claude plugin update ai-video-editing-lite@ai-video-editing-lite`
+   - Codex: `codex plugin marketplace upgrade ai-video-editing-lite` のあと `codex plugin add ai-video-editing-lite@ai-video-editing-lite`
+   （Windows の PowerShell 5.1 は `&&` を使えないので、1 行ずつ動かす）
+2. **新しい** lite の `miru/tools/setup.mjs` で `node <新しい SETUP> update`（更新は次のチャットから効くので、いまのチャットでは新しいプラグインの場所を探して使う。`~/MIRU/tools/setup.mjs` からは update できない）。表を足すときは、その前に D1 の控えを `~/MIRU/backups/` に取る（取れなければ止まる。控えなしで進めるのは利用者が了承したときだけ `--no-backup`）。終わりのコード **8** は、入れようとしている MIRU が今より古い（Claude Code と Codex で lite の版が違う）。新しい方の lite から動かす。
+3. 終わりのコード **6**（ぶつかった）なら、出た各ファイルで `~/MIRU/.miru-upstream-prev/<f>`（前の版）→ `~/MIRU/.miru-upstream/<f>`（新しい版）の違いを読み、それを `~/MIRU/<f>`（利用者が直したもの）に入れる。利用者が直した所は消さない。終わったら `node $SETUP deploy --resolved`。直し終えるまで update・start・deploy は 6 で止まる（新しい版の変更が消えないように）。
 4. `node $SETUP check` で「公開されている版」が新しい番号になったことを確かめる。
 
 ## 自分用に直す（利用者の MIRU だけが変わる）

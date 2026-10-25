@@ -23,7 +23,7 @@ body:
     id: check
     attributes:
       label: setup.mjs check の結果
-      description: そのまま貼ってください（URL は消してもかまいません）
+      description: 貼る前に、メールアドレスと URL は消してください（「鍵で入れる（…）」の行にメールが出ます）
       render: text
   - type: textarea
     id: what

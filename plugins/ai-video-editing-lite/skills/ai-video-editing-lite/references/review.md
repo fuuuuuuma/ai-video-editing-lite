@@ -9,7 +9,7 @@
 2. 「設定 → Claude Code・Codex とつなぐ」で鍵を作る。
 3. 画面に出るコマンドを利用者がターミナルに貼る（Claude Code 用・Codex 用・miru_sync 用。miru_sync 用は `~/.config/miru/token` と `~/.config/miru/url` を置く）。鍵を AI に見せてもらう必要はない。
 
-鍵は 1 年で切れる。切れたら同じ手順で作り直す。
+鍵は 1 年で切れる。切れたら同じ手順で作り直す（Claude Code は先に `claude mcp remove -s user miru`。Codex の設定と上げる道具の鍵は、画面のコマンドで置き換わる）。
 
 **上げる:**
 ```
