@@ -107,7 +107,7 @@ MIRU ライトを立てているなら、続けて AI に「MIRU を新しい版
 ## 困ったとき・問い合わせ
 
 まず AI に「MIRU を確かめて」（MIRU のこと）か「doctor を動かして」（編集のこと）と頼むと、直す所を言います。
-直らないときは [Issues](https://github.com/fuuuuuuma/ai-video-editing-lite/issues) に書いてください（テンプレートがあります）。**シークレットや鍵（`GOCSPX-`・`miru_` で始まる値）は貼らないでください。**
+直らないときは [Issues](https://github.com/fuuuuuuma/ai-video-editing-lite/issues) に書いてください（テンプレートがあります）。**シークレットや鍵（`GOCSPX-`・`miru_` で始まる値）と、通知の URL（`hooks.slack.com/services/…`・`discord.com/api/webhooks/…`）は貼らないでください。**
 
 ## ライセンス
 

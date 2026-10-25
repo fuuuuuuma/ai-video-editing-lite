@@ -33,6 +33,8 @@ PY scripts/miru_sync.py pull <案件> --preview vN      # 修正指示 → plann
 PY scripts/miru_sync.py reply <案件> --note <id> --text "直しました" --status done
 ```
 
+**承認と通知:** 見る人が MIRU の動画のパネルで「vN でOK（承認する）」を押すと承認になり、動画は「完了」になる（`pull` の出力の `approved`。いちばん新しい版の承認で、そのあとの未対応の指示が無いときだけ出る。前の版の承認は `stale_approvals`）。そのときは利用者に、完成版を書き出すかを聞いてから、その版の plan に画面での手直しを当てて書き出す（SKILL.md の 10）。通知（新しい版・修正指示・返事・承認を Slack か Discord に送る）は、利用者が MIRU の「設定 → チャンネル → 通知」で決める。通知の URL は鍵と同じ扱い（チャットで受け取らない）。
+
 **強調デザインの採用・不採用:** MIRU の「強調デザイン」で決めたものを `miru_sync.py designs-pull` で記憶に取り込む。新しいデザインを足したら `designs-push --case <案件> --plan <plan>` で見本ごと上げる（決めた状態は上書きしない）。
 
 ## 手元の確認画面（MIRU を使わないとき）

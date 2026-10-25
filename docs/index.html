@@ -385,7 +385,7 @@ const PHASES = [
       steps(`Cloudflare のアカウントを作る（無料）: ${link("https://dash.cloudflare.com/sign-up", "dash.cloudflare.com/sign-up")}`,
         "Cloudflare から届いたメールの<b>確認のリンクを押す</b>（押していないと、公開のところで止まります）",
         "MIRU にログインする Google アカウントを決める（ふだんの Gmail で大丈夫です）"),
-      box("費用", "Cloudflare の無料の範囲で使えます。動画の置き場（R2）は 10GB まで無料で、MIRU ライトは 9GB で止まるので、置いた量で請求が来ることはありません。"),
+      box("費用", "Cloudflare の無料の範囲で使えます。動画の置き場（R2）は 10GB まで無料で、MIRU ライトは 9GB で止まるので、ふつうに使う分には、置いた量で請求が来ることはありません。"),
     ] },
     { id: "node", who: "you", t: "Node.js 22.12 以上を入れる", d: "セットアップの道具を動かすため", body: () => [
       steps(`${link("https://nodejs.org/", "nodejs.org")} から LTS を入れる`, "ターミナル（Windows は PowerShell）で確かめる"),
@@ -410,7 +410,7 @@ const PHASES = [
     ] },
     { id: "r2", who: "you", opt: true, t: "R2 を有効にする", d: "「R2 がまだ使える状態になっていません」と出たら", body: () => [
       steps(`${link("https://dash.cloudflare.com/?to=/:account/r2/overview", "Cloudflare のダッシュボードの R2")} を開く`, "案内に沿って有効にする（支払い方法の登録を求められることがあります）", "AI に「有効にした」と伝える（同じコマンドを続きから動かします）"),
-      box("請求は？", "10GB までは無料です。MIRU ライトは 9GB で止まるので、置いた量で請求が来ることはありません。"),
+      box("請求は？", "10GB までは無料です。MIRU ライトは 9GB で止まるので、ふつうに使う分には、置いた量で請求が来ることはありません。"),
     ] },
     { id: "subdomain", who: "you", opt: true, t: "workers.dev の名前を決める", d: "「名前がまだ決まっていません」と出たら", body: () => [
       steps(`AI が出したリンク（…/workers/onboarding）か、${link("https://dash.cloudflare.com/?to=/:account/workers/onboarding", "Workers の始め方の画面")} を開く`,
@@ -500,8 +500,9 @@ const TROUBLES = [
   { id: "nobackup", g: "miru", c: ["#30b45a", "#2a9f4f"], t: "表を足す前の控えを取れませんでした", k: "控え backup no-backup 取れない", body: () => [box("", "公開はしていません。通信を確かめて、同じコマンドをもう一度動かします。控えなしで進めるなら --no-backup を付けます。")] },
   { id: "ready", g: "miru", c: ["#ff9f0a", "#ffb340"], t: "〜はもう上げ終わっています", k: "409 上げ終わって 版 名前 上げ直す", body: () => [box("", "上げ終わった版は、同じ名前で上げ直せません。直した版は v3-2 のように別の名前で上げます（AI に「別の版の名前で上げて」と頼めます）。")] },
   { id: "tsc", g: "miru", c: ["#ff3b30", "#ff6a3d"], t: "型の確認で止まりました", k: "tsc 型 deploy エラー 直した", body: () => [box("", "自分用に直した所に間違いがあります（公開はしていません）。AI にエラーを見せて「直して公開して」と頼みます。")] },
+  { id: "notifyfail", g: "miru", c: ["#3d9bff", "#30b45a"], t: "通知が届かない・URL を受け付けない", k: "通知 Slack Discord ウェブフック webhook 届かない 試しに送る", body: () => [box("", "受け付けるのは、Slack の https://hooks.slack.com/services/… と、Discord の https://discord.com/api/webhooks/… の形だけです。Slack・Discord の側でウェブフックを作り直したら、新しい URL を「保存」し直します。届かなくても、MIRU のほかの操作は止まりません。")] },
   { id: "aiformat", g: "miru", c: ["#8a94a6", "#5b6577"], t: "修正指示の「AI で整える」が働かない", k: "AI 整える Workers AI 働かない", body: () => [box("", "Workers AI の無料の範囲を超えたか、使っている AI のモデルが有料プラン向けです。文はそのまま残るので、修正には困りません。")] },
-  { id: "issue", g: "help", c: ["#0f172a", "#475569"], t: "それでも直らない", k: "Issues 問い合わせ 質問 バグ", body: () => [box("", "通し確認の結果を添えて、GitHub の Issues に書いてください（テンプレートがあります）。"), openBtn(`https://github.com/${LITE}/issues/new/choose`, "Issues に書く"), box("貼らないもの", "シークレットと鍵（GOCSPX-・miru_ で始まる値）。", "warn")] },
+  { id: "issue", g: "help", c: ["#0f172a", "#475569"], t: "それでも直らない", k: "Issues 問い合わせ 質問 バグ", body: () => [box("", "通し確認の結果を添えて、GitHub の Issues に書いてください（テンプレートがあります）。"), openBtn(`https://github.com/${LITE}/issues/new/choose`, "Issues に書く"), box("貼らないもの", "シークレットと鍵（GOCSPX-・miru_ で始まる値）、通知の URL（hooks.slack.com/services/…・discord.com/api/webhooks/…）。", "warn")] },
 ];
 
 // ── そのあと ──
@@ -519,8 +520,14 @@ const AFTERS = [
     code(setupCmd("changes")),
     box("編集のスキル（lite）を直したいとき", `作風や続けるルールは AI に言えば覚え直します。しくみそのものを変えるなら、GitHub で ${esc(LITE)} をフォークして、自分のフォークから入れます（元の新しい版は「Sync fork」で取り込めます）。`),
   ] },
+  { id: "notify", ic: "✓", g: "miru", c: ["#30b45a", "#3d9bff"], t: "通知と承認", d: "Slack・Discord に知らせる", body: () => [
+    steps("Slack は「Incoming Webhooks」、Discord はチャンネルの設定 →「連携サービス」→「ウェブフック」で URL を作る", "MIRU の「設定」→ チャンネル →「通知」に貼って「保存」→「試しに送る」"),
+    box("", "新しい版・修正指示・返事・承認が届きます。決められるのは管理者だけです。知らせには、チャンネル名・動画の題名・版の名前・指示と返事の文（一部）と時間の位置・書いた人や承認した人の名前・あなたの MIRU へのリンクが入ります（メールアドレスは入りません）。"),
+    box("通知の URL は鍵と同じ", "知っている人は誰でも、そこへ書き込めます。人や AI のチャットに貼らないでください（控えにも入ります）。", "warn"),
+    box("承認", "見る人が動画のパネルで「v3 でOK（承認する）」を押すと、誰がいつ承認したかが残り、動画は「完了」になります。AI動画編集 lite は、承認された版を見つけると、完成版を書き出すかを聞きます。"),
+  ] },
   { id: "quota", ic: "GB", g: "miru", c: ["#ff9f0a", "#ff6a3d"], t: "容量と費用", d: "9GB で止まる", body: () => [
-    box("", "置いた量が 9GB になると、新しい版を受け付けません（R2 の無料の 10GB を超えて請求されないように）。いまの量は MIRU の「設定 → 容量」で見られます。"),
+    box("", "置いた量が 9GB になると、新しい版を受け付けません（R2 の無料の 10GB を超えて請求されないように）。いまの量は MIRU の「設定 → 容量」で見られます。ほかに、見出しの画像（1 本 1MB まで）と、再生がうまくいかなかったときの記録（動画ごとに 2MB まで・14 日で消えます）を置きます。"),
     lbl("上限を変える（10GB を超えた分は、Cloudflare から 1GB あたり月数円の請求があります）"), code(setupCmd("quota --gb 30")),
     box("", `最新の値: ${link("https://developers.cloudflare.com/r2/pricing/", "R2 の料金")}`),
   ] },

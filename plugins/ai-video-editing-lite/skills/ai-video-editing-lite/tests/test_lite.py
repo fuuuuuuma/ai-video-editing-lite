@@ -121,6 +121,22 @@ class Miru(unittest.TestCase):
 
 
 
+class MiruApproved(unittest.TestCase):
+    def test_only_the_newest_version_without_later_asks(self):
+        import miru_sync
+        v1 = {'name': 'v1', 'ready': 1, 'approved_by': 'ed@example.com', 'approved_at': 100}
+        v2 = {'name': 'v2', 'ready': 1, 'approved_by': None, 'approved_at': None}
+        self.assertEqual(miru_sync.approval_of([v1], []), ({'version': 'v1', 'by': 'ed@example.com', 'at': 100}, []))
+        # v1 を承認 → 直して v2 を上げた: v1 の承認は古い（書き出さない）
+        self.assertEqual(miru_sync.approval_of([v2, v1], []), (None, [{'version': 'v1', 'by': 'ed@example.com', 'at': 100}]))
+        # 承認のあとに「やっぱりここも」: まだ書き出さない。済んだ指示や承認の前の指示は数えない
+        self.assertEqual(miru_sync.approval_of([v1], [{'status': 'open', 'created_at': 150}])[0], None)
+        self.assertEqual(miru_sync.approval_of([v1], [{'status': 'done', 'created_at': 150}, {'status': 'open', 'created_at': 50}])[0]['version'], 'v1')
+        # 上げ途中の版は数えない・承認の無い MIRU（0007 より前）
+        self.assertEqual(miru_sync.approval_of([{'name': 'v2', 'ready': 0}, v1], [])[0]['version'], 'v1')
+        self.assertEqual(miru_sync.approval_of([{'name': 'v1', 'ready': 1}], []), (None, []))
+
+
 class MiruVersion(unittest.TestCase):
     def test_bundled_miru_and_version_note(self):
         # 0.2.1: lite に入っている MIRU ライトの版（tools/release-light.mjs が書く）と、立てた MIRU が古いときの案内

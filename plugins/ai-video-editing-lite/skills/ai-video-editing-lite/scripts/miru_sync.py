@@ -629,11 +629,27 @@ def publish(args):
     print(json.dumps({'link': link, 'bytes': r.get('bytes')}, ensure_ascii=False))
 
 
+def approval_of(versions, notes):
+    """The approval to act on: the newest viewable version's, when no open note came after it -> ({version, by, at} | None, stale).
+    Older approvals (a later version was made, or the reviewer asked for more after approving) are stale: shown, never exported.
+    versions come newest first (the site orders them by created_at). Sites before 0007 have no approvals."""
+    ready = [v for v in versions if v.get('ready')]
+    item = lambda v: {'version': v['name'], 'by': v.get('approved_by'), 'at': v.get('approved_at')}
+    stale = [item(v) for v in ready[1:] if v.get('approved_at')]
+    top = ready[0] if ready else None
+    if not top or not top.get('approved_at'):
+        return None, stale
+    if any(n.get('status') != 'done' and (n.get('created_at') or 0) > top['approved_at'] for n in notes):
+        return None, stale + [item(top)]
+    return item(top), stale
+
+
 def pull(args):
     """The site's notes and fixes into the case (the same files the local review page writes)."""
     case = args.case.resolve()
     vid = video_id(case, args.video)
     notes = call('GET', f'/api/videos/{vid}/notes')['notes']
+    approved, stale = approval_of(call('GET', f'/api/videos/{vid}').get('versions') or [], notes)     # 見る人の「この版で OK」
     items = [{**n, 'preview': n.get('version'), 'status': 'done' if n['status'] == 'done' else 'open'} for n in notes]
     out = {'planning/review-comments.json': {'items': items}}
     for kind, f in (('caption', 'planning/caption-edits.json'), ('cut', 'planning/cut-edits.json')):
@@ -654,7 +670,7 @@ def pull(args):
             data = {**old, 'items': keep + [x for x in data['items'] if x.get('preview') == args.preview]}
         p.write_text(json.dumps(data, ensure_ascii=False, indent=1))
     print(json.dumps({'notes': len(items), 'caption_edits': len(out['planning/caption-edits.json']['items']),
-                      'cut_edits': len(out['planning/cut-edits.json']['items'])}, ensure_ascii=False))
+                      'cut_edits': len(out['planning/cut-edits.json']['items']), 'approved': approved, 'stale_approvals': stale}, ensure_ascii=False))
 
 
 def reply(args):
