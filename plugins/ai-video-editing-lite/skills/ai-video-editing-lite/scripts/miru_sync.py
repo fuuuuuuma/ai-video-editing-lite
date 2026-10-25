@@ -656,20 +656,25 @@ DRAW_COLORS = {'#ff3b30': '赤', '#ffd60a': '黄', '#0a84ff': '青', '#ffffff': 
 
 
 def drawing_hint(d):
-    """A mark the reviewer drew on the frame (MIRU 2026-10-25), in words for the AI: which colors and where.
-    Points are 0..1000 of the frame's width and height."""
+    """A mark the reviewer drew on the frame (MIRU 2026-10-25), in words for the AI: each line's color and where.
+    Points are 0..1000 of the frame's width and height. One entry per line (put together, marks far apart read as
+    "the middle"). The same words as the site's drawingHint (worker/drawing.ts)."""
     s = [st for st in ((d or {}).get('s') or []) if len(st.get('p') or []) >= 2]
-    xs = [x for st in s for x in st['p'][0::2]]
-    ys = [y for st in s for y in st['p'][1::2]]
-    if not xs:
+    if not s:
         return None
-    x0, x1, y0, y1 = min(xs) / 10, max(xs) / 10, min(ys) / 10, max(ys) / 10
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    h = '左' if cx < 34 else '右' if cx > 66 else ''
-    v = '上' if cy < 34 else '下' if cy > 66 else ''
-    area = h + v if h and v else f'{v}の中央' if v else f'{h}の中ほど' if h else '真ん中'
-    cols = '・'.join(dict.fromkeys(DRAW_COLORS.get(st.get('c'), '赤') for st in s))
-    return f'映像に{cols}の線 {len(s)} 本（画面の{area}あたり。横 {x0:.0f}〜{x1:.0f}%・縦 {y0:.0f}〜{y1:.0f}%）'
+
+    def area(cx, cy):
+        h = '左' if cx < 34 else '右' if cx > 66 else ''
+        v = '上' if cy < 34 else '下' if cy > 66 else ''
+        return h + v if h and v else f'{v}の中央' if v else f'{h}の中ほど' if h else '真ん中'
+
+    def one(st):
+        xs, ys = st['p'][0::2], st['p'][1::2]
+        x0, x1, y0, y1 = min(xs) / 10, max(xs) / 10, min(ys) / 10, max(ys) / 10
+        r = lambda n: int(n + 0.5)
+        return f"{DRAW_COLORS.get(st.get('c'), '赤')}（画面の{area((x0 + x1) / 2, (y0 + y1) / 2)}。横 {r(x0)}〜{r(x1)}%・縦 {r(y0)}〜{r(y1)}%）"
+    more = f'、ほか {len(s) - 6} 本' if len(s) > 6 else ''
+    return f"映像に描いた線 {len(s)} 本: {'、'.join(one(st) for st in s[:6])}{more}"
 
 
 def pull(args):

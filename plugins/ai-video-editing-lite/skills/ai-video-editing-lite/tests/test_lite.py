@@ -216,7 +216,9 @@ class MiruDrawing(unittest.TestCase):
     def test_a_drawn_mark_in_words(self):
         import miru_sync
         d = {'v': 1, 's': [{'c': '#ff3b30', 'w': 6, 'p': [700, 100, 900, 250]}, {'c': '#ffd60a', 'w': 6, 'p': [800, 150]}]}
-        self.assertEqual(miru_sync.drawing_hint(d), '映像に赤・黄の線 2 本（画面の右上あたり。横 70〜90%・縦 10〜25%）')
+        self.assertEqual(miru_sync.drawing_hint(d), '映像に描いた線 2 本: 赤（画面の右上。横 70〜90%・縦 10〜25%）、黄（画面の右上。横 80〜80%・縦 15〜15%）')
+        far = {'s': [{'c': '#ff3b30', 'p': [50, 50, 150, 150]}, {'c': '#0a84ff', 'p': [850, 850, 950, 950]}]}   # 離れた印を「真ん中」にまとめない
+        self.assertEqual(miru_sync.drawing_hint(far), '映像に描いた線 2 本: 赤（画面の左上。横 5〜15%・縦 5〜15%）、青（画面の右下。横 85〜95%・縦 85〜95%）')
         self.assertIn('真ん中', miru_sync.drawing_hint({'s': [{'c': '#0a84ff', 'p': [450, 450, 550, 550]}]}))
         self.assertIn('下の中央', miru_sync.drawing_hint({'s': [{'c': '#ffffff', 'p': [400, 800, 600, 900]}]}))
         self.assertIsNone(miru_sync.drawing_hint({'s': []}))
