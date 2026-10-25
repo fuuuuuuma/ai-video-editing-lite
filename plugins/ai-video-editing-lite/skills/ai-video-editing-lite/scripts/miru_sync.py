@@ -240,11 +240,18 @@ def multipart(prefix, qs, src, resume_file):
     """Send src in 50 MB parts. With resume_file, the upload id and the parts already sent are kept there, so a
     later run continues instead of starting over. On a refusal (4xx) the upload is aborted on the site."""
     st = json.loads(resume_file.read_text()) if resume_file and resume_file.exists() else {}
-    size = src.stat().st_size
-    if st.get('size') != size:
+    stat = src.stat()
+    size = stat.st_size
+    # 前と違うファイル（書き出し直した MP4 など。大きさか更新の時刻で見る）なら、前の途中の片を捨ててから始める
+    # （2026-10-25 の点検: 捨てずに始めると、前の片が 7 日間 容量を使った）
+    if st and (st.get('size') != size or st.get('mtime', stat.st_mtime_ns) != stat.st_mtime_ns):
+        try:
+            call('POST', f"{prefix}/{st['uploadId']}/abort?{qs}")
+        except MiruError:
+            pass
         st = {}
     if not st:
-        st = {'uploadId': call('POST', f'{prefix}?{qs}')['uploadId'], 'size': size, 'parts': {}}
+        st = {'uploadId': call('POST', f'{prefix}?{qs}')['uploadId'], 'size': size, 'mtime': stat.st_mtime_ns, 'parts': {}}
     uid = st['uploadId']
 
     def keep():
@@ -689,13 +696,20 @@ def deliver(args):
         raise SystemExit(f'MP4 が見つかりません: {src}')
     base = f'/api/videos/{vid}/versions/{urllib.parse.quote(args.preview)}'
     size = src.stat().st_size
-    if size <= ONE_SHOT:
-        call('PUT', f'{base}/files/final.mp4', data=src.read_bytes(), ctype='video/mp4')
-    else:
-        qs = urllib.parse.urlencode({'path': 'final.mp4', 'type': 'video/mp4', 'size': size})
-        resume = case / '.akari/cache/miru-upload' / f'final-{hashlib.sha256((SITE + vid).encode()).hexdigest()[:12]}-{args.preview}.json'
-        multipart(f'{base}/mpu', qs, src, resume)
-    print(json.dumps({'video': vid, 'preview': args.preview, 'bytes': size, 'link': f'{SITE}/v/{vid}?ver={args.preview}'}, ensure_ascii=False))
+    try:
+        if size <= ONE_SHOT:
+            call('PUT', f'{base}/files/final.mp4', data=src.read_bytes(), ctype='video/mp4')
+        else:
+            qs = urllib.parse.urlencode({'path': 'final.mp4', 'type': 'video/mp4', 'size': size})
+            resume = case / '.akari/cache/miru-upload' / f'final-{hashlib.sha256((SITE + vid).encode()).hexdigest()[:12]}-{args.preview}.json'
+            multipart(f'{base}/mpu', qs, src, resume)
+    except MiruError as e:
+        # 返事が届かずに送り直したときなど: 同じ大きさの完成版がもう置いてあれば、渡せている
+        placed = [f for f in (call('GET', f'/api/videos/{vid}').get('final') or []) if f.get('version') == args.preview] if e.code == 409 else []
+        if not placed or placed[0].get('size') != size:
+            raise
+    print(json.dumps({'video': vid, 'preview': args.preview, 'bytes': size,
+                      'next': f'相手は MIRU のホーム（{SITE}/）で動画を押すと、「完成版をダウンロード」から受け取れます'}, ensure_ascii=False))
 
 
 def reply(args):

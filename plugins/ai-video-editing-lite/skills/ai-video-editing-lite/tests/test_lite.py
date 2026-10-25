@@ -164,6 +164,54 @@ class MiruDeliver(unittest.TestCase):
             miru_sync.call, miru_sync.multipart, miru_sync.ONE_SHOT, miru_sync.SITE = old
 
 
+class MiruDeliverAgain(unittest.TestCase):
+    def test_already_placed_with_the_same_size_is_done(self):
+        import argparse, miru_sync
+        case = Path(tempfile.mkdtemp(prefix='aive-deliver2-')) / 'case-b'
+        case.mkdir()
+        mp4 = case / 'final.mp4'
+        mp4.write_bytes(b'x' * 300)
+        placed = {'size': 300}
+
+        def fake(method, path, **kw):
+            if method == 'PUT':
+                raise miru_sync.MiruError('PUT …: 409 v3 の完成版はもう置いてあります', 409)
+            return {'final': [{'version': 'v3', 'size': placed['size']}]}
+        old = (miru_sync.call, miru_sync.SITE)
+        miru_sync.call, miru_sync.SITE = fake, 'https://miru.example'
+        try:
+            a = argparse.Namespace(case=case, video='ep1', preview='v3', file=str(mp4))
+            miru_sync.deliver(a)                 # 返事が届かずに送り直した: 同じ大きさなら渡せている
+            placed['size'] = 999
+            with self.assertRaises(miru_sync.MiruError):
+                miru_sync.deliver(a)             # 違う完成版が置いてある: 画面で消してから
+        finally:
+            miru_sync.call, miru_sync.SITE = old
+
+
+class MiruMultipartResume(unittest.TestCase):
+    def test_a_different_file_drops_the_old_parts_first(self):
+        import miru_sync
+        d = Path(tempfile.mkdtemp(prefix='aive-mpu-'))
+        src, resume = d / 'final.mp4', d / 'resume.json'
+        src.write_bytes(b'x' * 10)
+        resume.write_text(json.dumps({'uploadId': 'old', 'size': 99, 'parts': {}}))      # 前に止まった、大きさの違うファイル
+        calls = []
+
+        def fake(method, path, **kw):
+            calls.append((method, path.split('?')[0]))
+            return {'uploadId': 'new'} if path.startswith('/p?') else {'etag': 'e'} if method == 'PUT' else {'ok': True}
+        old = miru_sync.call
+        miru_sync.call = fake
+        try:
+            miru_sync.multipart('/p', 'path=final.mp4', src, resume)
+        finally:
+            miru_sync.call = old
+        self.assertEqual(calls[0], ('POST', '/p/old/abort'))           # 前の片を先に捨てる
+        self.assertEqual(calls[1], ('POST', '/p'))
+        self.assertIn(('POST', '/p/new/complete'), calls)
+
+
 class MiruVersion(unittest.TestCase):
     def test_bundled_miru_and_version_note(self):
         # 0.2.1: lite に入っている MIRU ライトの版（tools/release-light.mjs が書く）と、立てた MIRU が古いときの案内
